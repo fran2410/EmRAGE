@@ -17,7 +17,6 @@ import shutil
 class MultilingualEmbedder:
     
     def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", device: str = "cpu"):
-
         print(f"Modelo: {model_name} (device: {device})")
         self.model = SentenceTransformer(model_name, device=device)
         self.embedding_dim = self.model.get_sentence_embedding_dimension()
@@ -41,11 +40,189 @@ class MultilingualEmbedder:
         return self.model.encode(query, convert_to_numpy=True)
 
 
+class ContactVectorDB:
+    
+    def __init__(self,
+                 db_path: str = "data/vectordb_contacts",
+                 collection_name: str = "contacts",
+                 embedder: Optional[MultilingualEmbedder] = None):
+        
+        self.db_path = Path(db_path)
+        self.db_path.mkdir(parents=True, exist_ok=True)
+        
+        self.embedder = embedder or MultilingualEmbedder()
+        
+        print(f"Inicializando ContactDB en {self.db_path}")
+        self.client = chromadb.PersistentClient(
+            path=str(self.db_path),
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True
+            )
+        )
+        
+        try:
+            self.collection = self.client.get_collection(collection_name)
+            print(f"Colección '{collection_name}' cargada. Contactos: {self.collection.count()}")
+        except:
+            self.collection = self.client.create_collection(
+                name=collection_name,
+                metadata={"description": "Contact search collection"}
+            )
+            print(f"Nueva colección '{collection_name}' creada")
+    
+    def _extract_display_name(self, email_str: str) -> str:
+        match = re.match(r'^(.+?)\s*<(.+?)>$', email_str)
+        if match:
+            return match.group(1).strip()
+        
+        if '@' in email_str:
+            username = email_str.split('@')[0]
+            return username.replace('.', ' ').replace('_', ' ')
+        
+        return email_str
+    
+    def _normalize_email(self, email_str: str) -> str:
+        match = re.search(r'<(.+?)>', email_str)
+        if match:
+            return match.group(1).strip().lower()
+        return email_str.strip().lower()
+    
+    def index_contacts(self, emails: List[Any], batch_size: int = 100):
+        
+        contact_map = {}
+        
+        for email in tqdm(emails, desc="Extrayendo contactos"):
+            all_addresses = []
+            
+            if email.from_address:
+                all_addresses.append((email.from_address, 'sent'))
+            
+            for addr in (email.to_addresses or []):
+                all_addresses.append((addr, 'received'))
+            
+            for addr in (email.cc_addresses or []):
+                all_addresses.append((addr, 'received'))
+            
+            for addr in (email.bcc_addresses or []):
+                all_addresses.append((addr, 'received'))
+            
+            for addr_str, role in all_addresses:
+                email_addr = self._normalize_email(addr_str)
+                
+                if email_addr not in contact_map:
+                    contact_map[email_addr] = {
+                        'email': email_addr,
+                        'display_name': self._extract_display_name(addr_str),
+                        'sent_ids': [],
+                        'received_ids': []
+                    }
+                
+                if role == 'sent':
+                    if email.id not in contact_map[email_addr]['sent_ids']:
+                        contact_map[email_addr]['sent_ids'].append(email.id)
+                else:
+                    if email.id not in contact_map[email_addr]['received_ids']:
+                        contact_map[email_addr]['received_ids'].append(email.id)
+        
+        documents = []
+        metadatas = []
+        ids = []
+        
+        for email_addr, contact_info in contact_map.items():
+            display_name = contact_info['display_name']
+            username = email_addr.split('@')[0].replace('.', ' ').replace('_', ' ')
+            
+            doc_text = f"{display_name} {username} {email_addr}"
+            
+            documents.append(doc_text)
+            metadatas.append({
+                'email_address': email_addr,
+                'display_name': display_name,
+                'sent_ids': json.dumps(contact_info['sent_ids']),
+                'received_ids': json.dumps(contact_info['received_ids']),
+                'total_emails': len(contact_info['sent_ids']) + len(contact_info['received_ids'])
+            })
+            ids.append(f"contact_{email_addr}")
+        
+        if not documents:
+            print("No hay contactos para indexar")
+            return
+        
+        print(f"Indexando {len(documents)} contactos únicos...")
+        embeddings = self.embedder.encode(documents, batch_size=batch_size)
+        
+        for i in tqdm(range(0, len(documents), batch_size), desc="Insertando contactos"):
+            end_idx = min(i + batch_size, len(documents))
+            
+            self.collection.add(
+                embeddings=embeddings[i:end_idx].tolist(),
+                documents=documents[i:end_idx],
+                metadatas=metadatas[i:end_idx],
+                ids=ids[i:end_idx]
+            )
+        
+        print(f"Total contactos en ContactDB: {self.collection.count()}")
+    
+    def search_contacts(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        
+        query_embedding = self.embedder.encode_query(query)
+        
+        results = self.collection.query(
+            query_embeddings=[query_embedding.tolist()],
+            n_results=n_results,
+            include=["metadatas", "documents", "distances"]
+        )
+        
+        if not results['ids'][0]:
+            return []
+        
+        contacts = []
+        for idx in range(len(results['ids'][0])):
+            metadata = results['metadatas'][0][idx]
+            
+            sent_ids = json.loads(metadata['sent_ids'])
+            received_ids = json.loads(metadata['received_ids'])
+            all_ids = list(set(sent_ids + received_ids))
+            
+            contacts.append({
+                'email_address': metadata['email_address'],
+                'display_name': metadata['display_name'],
+                'email_ids': all_ids,
+                'sent_count': len(sent_ids),
+                'received_count': len(received_ids),
+                'distance': results['distances'][0][idx]
+            })
+        
+        return contacts
+    
+    def delete_collection(self):
+        try:
+            self.client.delete_collection(self.collection.name)
+            print(f"Colección '{self.collection.name}' eliminada")
+        except Exception as e:
+            print(f"Error eliminando colección: {e}")
+    
+    def delete_db(self):
+        try:
+            self.client.delete_collection(self.collection.name)
+        except:
+            pass
+        
+        try:
+            if self.db_path.exists():
+                shutil.rmtree(self.db_path)
+                print(f"ContactDB eliminada: {self.db_path}")
+        except Exception as e:
+            print(f"Error eliminando ContactDB: {e}")
+
+
 class EmailVectorDB:
     def __init__(self, 
                  db_path: str = "data/vectordb",
                  collection_name: str = "emails",
-                 embedder: Optional[MultilingualEmbedder] = None):
+                 embedder: Optional[MultilingualEmbedder] = None,
+                 contact_db: Optional[ContactVectorDB] = None):
 
         self.db_path = Path(db_path)
         self.db_path.mkdir(parents=True, exist_ok=True)
@@ -70,7 +247,8 @@ class EmailVectorDB:
                 metadata={"description": "Email search collection"}
             )
             print(f"Nueva colección '{collection_name}' creada")
-            
+        
+        self.contact_db = contact_db
         self.chunk_size = 300 
         self.chunk_overlap = 50  
     
@@ -97,15 +275,33 @@ class EmailVectorDB:
                 break
         
         return chunks
-    
-    def index_emails(self, emails: List[Any], batch_size: int = 100):
+    def _normalize_text(self, text: str) -> str:
+          
+        text = re.sub(r'\s+', ' ', text)
+        
+          
+        text = re.sub(r'[=\-_]{3,}', ' ', text)
+        
+          
+        text = re.sub(r'http[s]?://\S+', '[URL]', text)
+        
+          
+        text = re.sub(r'\b[\w.]+@[\w.]+\b', '[EMAIL]', text)
+        
+        return text.strip()
 
+    def index_emails(self, emails: List[Any], batch_size: int = 100):
+        
+        if self.contact_db:
+            print("\n=== Indexando ContactDB ===")
+            self.contact_db.index_contacts(emails, batch_size=batch_size)
+        
+        print("\n=== Indexando EmailDB ===")
         documents = []
         metadatas = []
         ids = []
         
         for email in tqdm(emails, desc="Preparando documentos"):
-
             email_docs, email_metas, email_ids = self._prepare_email_documents(email)
             documents.extend(email_docs)
             metadatas.extend(email_metas)
@@ -137,7 +333,7 @@ class EmailVectorDB:
         documents = []
         metadatas = []
         ids = []
-        
+
         base_metadata = {
             "email_id": email.id,
             "message_id": email.message_id,
@@ -147,28 +343,25 @@ class EmailVectorDB:
             "bcc": ", ".join(email.bcc_addresses) if email.bcc_addresses else "",
             "date": email.date or "",
             "subject": email.subject or "",
-            "body": email.body or "",
-            "x_from": email.x_from or "",
-            "x_to": ", ".join(email.x_to) if email.x_to else "",
-            "x_cc": ", ".join(email.x_cc) if email.x_cc else "",
-            "x_bcc": ", ".join(email.x_bcc) if email.x_bcc else "",
-            "x_folder": email.x_folder or "",
-            "x_origin": email.x_origin or "",
+            "thread_id": email.thread_id or "",
+            "in_reply_to": email.in_reply_to or "",
+            "references": email.references or "",
             "x_filename": email.x_filename or "",
         }
 
         subject = email.subject or ""
         body = email.body or ""
 
-        # Si no hay body pero sí subject: indexamos un único chunk con solo el asunto.
         if not body and subject:
             doc_id = f"{email.id}_chunk_0"
             doc_text = f"Subject: {subject}"
+            doc_text = self._normalize_text(doc_text)
+
             documents.append(doc_text)
 
             metadata = base_metadata.copy()
             metadata.update({
-                "chunk_type": "subject_body",   # ahora todos los chunks usan este tipo
+                "chunk_type": "subject_body",
                 "chunk_index": 0,
                 "chunk_start": 0,
                 "chunk_end": 0,
@@ -178,30 +371,26 @@ class EmailVectorDB:
             ids.append(doc_id)
             return documents, metadatas, ids
 
-        # Si tampoco hay subject ni body: no hacemos nada.
         if not body and not subject:
             return documents, metadatas, ids
 
-        # Si hay body (sea corto o largo), lo dividimos en chunks de palabras
         chunks = self.chunk_text(body, self.chunk_size, self.chunk_overlap)
         total_chunks = len(chunks) if chunks else 1
 
         for idx, (chunk_text, start_pos, end_pos) in enumerate(chunks):
-            # Cada chunk siempre comienza con el asunto (aunque esté vacío)
             if subject:
                 doc_text = f"Subject: {subject}\n\n{chunk_text}"
             else:
-                # Si no hay asunto, solo ponemos el trozo de body
                 doc_text = chunk_text
-
+            doc_text = self._normalize_text(doc_text)
             doc_id = f"{email.id}_chunk_{idx}"
             documents.append(doc_text)
 
             metadata = base_metadata.copy()
             metadata.update({
-                "chunk_type": "subject_body",   # único tipo de chunk ahora
+                "chunk_type": "subject_body",
                 "chunk_index": idx,
-                "chunk_start": start_pos,       # posiciones dentro del body original
+                "chunk_start": start_pos,
                 "chunk_end": end_pos,
                 "total_chunks": total_chunks
             })
@@ -209,68 +398,98 @@ class EmailVectorDB:
             ids.append(doc_id)
 
         return documents, metadatas, ids
-        
-    def _is_duplicate_content(self, email_result: Dict) -> bool:
-        body = email_result.get('body', '')
-        subject = email_result.get('subject', '')
-        
-        forward_patterns = [
-            r'-{20,}\s*Forwarded by',
-            r'From:.*\nSent:.*\nTo:',
-            r'-----Original Message-----',
-        ]
-        
-        has_prefix = bool(re.match(r'^\s*(re|fw|fwd):', subject, re.IGNORECASE))
-        has_forward_pattern = any(re.search(p, body[:1000], re.IGNORECASE) for p in forward_patterns)
-        
-        return has_prefix and has_forward_pattern
-    
-    def _deduplicate_results(self, results: List[Dict]) -> List[Dict]:
-        unique_results = []
-        seen_subjects = {}
-        
-        for result in results:
-            if self._is_duplicate_content(result):
-                continue
-            
-            subject = result.get('subject', '')
-            norm_subject = re.sub(r'^\s*(re|fw|fwd):\s*', '', subject, flags=re.IGNORECASE).strip().lower()
-            
-            if norm_subject in seen_subjects:
-                continue
-            
-            seen_subjects[norm_subject] = True
-            unique_results.append(result)
-        
-        return unique_results
-    
-    def search(self, query: str, n_results: int = 10, 
-               filter_metadata: Optional[Dict] = None,
-               deduplicate: bool = True) -> Dict[str, Any]:
 
-        search_n = n_results * 3 if deduplicate else n_results
+    
+    def search_with_reranking(self, query: str, n_results: int = 10, 
+                            filter_metadata: Optional[Dict] = None,
+                            group_threads: bool = False) -> Dict[str, Any]:
         
+          
+        initial_n = n_results * 3
         query_embedding = self.embedder.encode_query(query)
         
         results = self.collection.query(
             query_embeddings=[query_embedding.tolist()],
-            n_results=search_n,
+            n_results=initial_n,
             where=filter_metadata,
             include=["metadatas", "documents", "distances"]
         )
         
-        processed_results = self._process_search_results(results, query)
-        if deduplicate and processed_results['results']:
-            processed_results['results'] = self._deduplicate_results(processed_results['results'])[:n_results] 
-            processed_results['total'] = len(processed_results['results'])
+        if not results['ids'][0]:
+            return {"query": query, "results": [], "total": 0}
         
-        return processed_results
-    
-    def _process_search_results(self, results: Dict, query: str) -> Dict[str, Any]:
+          
+        reranked_results = self._rerank_results(results, query)
+        
+          
+        processed = self._process_search_results(
+            reranked_results, query, group_threads=group_threads
+        )
+        
+        processed['results'] = processed['results'][:n_results]
+        processed['total'] = len(processed['results'])
+        
+        return processed
+
+    def _rerank_results(self, results: Dict, query: str) -> Dict:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+        
+        docs = results['documents'][0]
+        ids = results['ids'][0]
+        metadatas = results['metadatas'][0]
+        distances = results['distances'][0]
+        
+          
+        vectorizer = TfidfVectorizer(max_features=1000)
+        try:
+            tfidf_matrix = vectorizer.fit_transform(docs + [query])
+            query_tfidf = tfidf_matrix[-1]
+            doc_tfidf = tfidf_matrix[:-1]
+            tfidf_scores = cosine_similarity(query_tfidf, doc_tfidf)[0]
+        except:
+            tfidf_scores = np.zeros(len(docs))
+        
+          
+        query_terms = set(query.lower().split())
+        bm25_scores = []
+        for doc in docs:
+            doc_terms = doc.lower().split()
+            matches = sum(1 for term in query_terms if term in doc_terms)
+            score = matches / len(query_terms) if query_terms else 0
+            bm25_scores.append(score)
+        
+          
+          
+        max_dist = max(distances) if distances else 1
+        norm_distances = [1 - (d / max_dist) for d in distances]
+        
+          
+        combined_scores = []
+        for i in range(len(docs)):
+            score = (
+                0.5 * norm_distances[i] +        
+                0.3 * tfidf_scores[i] +           
+                0.2 * bm25_scores[i]              
+            )
+            combined_scores.append(score)
+        
+          
+        sorted_indices = np.argsort(combined_scores)[::-1]
+        
+        return {
+            'ids': [[ids[i] for i in sorted_indices]],
+            'documents': [[docs[i] for i in sorted_indices]],
+            'metadatas': [[metadatas[i] for i in sorted_indices]],
+            'distances': [[1 - combined_scores[i] for i in sorted_indices]]    
+        }
+
+    def _process_search_results(self, results: Dict, query: str, group_threads: bool = False) -> Dict[str, Any]:
 
         if not results['ids'][0]:
             return {"query": query, "results": [], "total": 0}
         
+          
         email_results = {}
         
         for idx, doc_id in enumerate(results['ids'][0]):
@@ -287,6 +506,7 @@ class EmailVectorDB:
                     "to": metadata.get('to', ''),
                     "subject": metadata.get('subject', ''),
                     "date": metadata.get('date', ''),
+                    "thread_id": metadata.get('thread_id', ''),
                     "chunks": [],
                     "best_distance": distance
                 }
@@ -301,15 +521,86 @@ class EmailVectorDB:
             if distance < email_results[email_id]['best_distance']:
                 email_results[email_id]['best_distance'] = distance
         
-        sorted_results = sorted(
-            email_results.values(), 
-            key=lambda x: x['best_distance']
-        )
+          
+        sorted_emails = sorted(email_results.values(), key=lambda x: x['best_distance'])
+        
+          
+        if not group_threads:
+            return {
+                "query": query,
+                "results": sorted_emails,
+                "total": len(sorted_emails)
+            }
+        
+          
+        processed_threads = set()
+        final_results = []
+        
+        for email in sorted_emails:
+            thread_id = email.get('thread_id', '')
+            
+              
+            if not thread_id:
+                final_results.append({
+                    **email,
+                    "is_thread": False,
+                    "thread_emails": [email]
+                })
+                continue
+            
+              
+            if thread_id in processed_threads:
+                continue
+            
+              
+            thread_emails = [e for e in sorted_emails if e.get('thread_id') == thread_id]
+            
+              
+              
+            if len(thread_emails) == 1:
+                final_results.append({
+                    **email,
+                    "is_thread": False,
+                    "thread_emails": [email]
+                })
+                processed_threads.add(thread_id)
+                continue
+              
+            
+              
+            processed_threads.add(thread_id)
+            
+              
+            thread_emails_sorted = sorted(
+                thread_emails, 
+                key=lambda x: x.get('date', '')
+            )
+            
+              
+            best_email = min(thread_emails, key=lambda x: x['best_distance'])
+            
+              
+            final_results.append({
+                "email_id": best_email['email_id'],    
+                "from": best_email['from'],
+                "to": best_email['to'],
+                "subject": best_email['subject'],
+                "date": best_email['date'],
+                "thread_id": thread_id,
+                "chunks": best_email['chunks'],
+                "best_distance": best_email['best_distance'],
+                "is_thread": True,
+                "thread_size": len(thread_emails),
+                "thread_emails": thread_emails_sorted    
+            })
+        
+          
+        final_results.sort(key=lambda x: x['best_distance'])
         
         return {
             "query": query,
-            "results": sorted_results,
-            "total": len(sorted_results)
+            "results": final_results,
+            "total": len(final_results)
         }
     
     def delete_collection(self):
@@ -320,7 +611,6 @@ class EmailVectorDB:
             print(f"Error eliminando colección: {e}")
     
     def delete_db(self):
-        """Elimina completamente la base de datos"""
         try:
             self.client.delete_collection(self.collection.name)
             print(f"Colección '{self.collection.name}' eliminada")
@@ -352,15 +642,17 @@ class EmailVectorDB:
         else:
             chunk_types = {}
         
-        return {
+        stats = {
             "total_chunks": count,
-            "chunk_distribution": chunk_types,
             "db_path": str(self.db_path),
             "embedding_dim": self.embedder.embedding_dim
         }
+        
+        if self.contact_db:
+            stats["contacts_count"] = self.contact_db.collection.count()
+        
+        return stats
 
-
- 
 
 def load_tests_from_tsv(test_path: str) -> List[Tuple[str, str]]:
     tests = []
@@ -385,7 +677,6 @@ def load_tests_from_tsv(test_path: str) -> List[Tuple[str, str]]:
 
 
 def get_email_ids_in_collection(db: EmailVectorDB) -> set:
-     
     try:
         total = db.collection.count()
         sample = db.collection.get(limit=max(1000, total), include=['metadatas'])
@@ -411,7 +702,6 @@ def run_retrieval_tester(db: EmailVectorDB, test_file: str, topk: int = 3, n_res
 
     for expected_id, question in tqdm(tests, desc="Ejecutando tests"):
         if expected_id not in present_ids:
-             
             missing_in_db += 1
             p_at_1.append(0)
             mrr_scores.append(0)
@@ -425,22 +715,20 @@ def run_retrieval_tester(db: EmailVectorDB, test_file: str, topk: int = 3, n_res
             })
             continue
 
-        search_res = db.search(question, n_results=n_results, deduplicate=True)
+        # search_res = db.search(question, n_results=n_results, group_threads=True)
+        search_res = db.search_with_reranking(question, n_results=n_results, group_threads=True)
         predicted_ids = [r['email_id'] for r in search_res.get('results', [])]
 
         rank = None
         if expected_id in predicted_ids:
             rank = predicted_ids.index(expected_id) + 1
         
-         
         p1 = 1 if predicted_ids and predicted_ids[0] == expected_id else 0
         p_at_1.append(p1)
 
-         
         rr = 1.0 / rank if rank else 0.0
         mrr_scores.append(rr)
 
-         
         r_at_k = 1 if expected_id in predicted_ids[:topk] else 0
         recall_at_k.append(r_at_k)
 
@@ -542,7 +830,7 @@ def test_multiple_models(json_path: str, test_file: str, topk: int = 3, n_result
                 'mrr': 0.0,
                 f'recall_at_{topk}': 0.0
             }
-            print(f"\n❌ Error con modelo {model_name}: {e}")
+            print(f"\nError con modelo {model_name}: {e}")
             print(f"Tiempo antes del fallo: {elapsed_time:.2f} s")
 
         finally:
@@ -583,11 +871,11 @@ def test_multiple_models(json_path: str, test_file: str, topk: int = 3, n_result
                             key=lambda x: x[1].get('precision_at_1', 0))
         
         print(f"\n{'='*80}")
-        print(f"🏆 Mejor modelo por MRR: {best_model_mrr[0]} (MRR: {best_model_mrr[1].get('mrr', 0):.3f})")
-        print(f"🏆 Mejor modelo por P@1: {best_model_p1[0]} (P@1: {best_model_p1[1].get('precision_at_1', 0):.3f})")
+        print(f"Mejor modelo por MRR: {best_model_mrr[0]} (MRR: {best_model_mrr[1].get('mrr', 0):.3f})")
+        print(f"Mejor modelo por P@1: {best_model_p1[0]} (P@1: {best_model_p1[1].get('precision_at_1', 0):.3f})")
         print(f"{'='*80}\n")
     else:
-        print("\n⚠️  Ningún modelo se ejecutó correctamente\n")
+        print("\nNingún modelo se ejecutó correctamente\n")
     
      
     output_file = "../data/processed/model_comparison_results.json"
@@ -601,57 +889,77 @@ def test_multiple_models(json_path: str, test_file: str, topk: int = 3, n_result
  
 
 
-def test_embeddings_and_db():
-    json_path = "../data/processed/enron_sample_1000+60.json"
+def test_embeddings_and_db( json_path: str, emails_db_path: str, contacts_db_path: str):
     with open(json_path, "r", encoding="utf-8") as f:
         emails_data = json.load(f)
 
     emails = [Email(**e) for e in emails_data]
 
-    db = EmailVectorDB(db_path="../data/test_vectordb")
+    embedder = MultilingualEmbedder()
+    contact_db = ContactVectorDB(db_path=contacts_db_path, embedder=embedder)
+    db = EmailVectorDB(db_path=emails_db_path, embedder=embedder, contact_db=contact_db)
 
     print(f"Cargando emails desde {json_path} ({len(emails)} encontrados)")
-    db.index_emails(emails)
+    # db.index_emails(emails)
 
-    results = db.search("bike", n_results=10, deduplicate=False)
-    
+    print("\n=== Test búsqueda por contacto ===")
+    contacts = contact_db.search_contacts("sergio", n_results=10)
+    for c in contacts:
+        print(f"  {c['display_name']} ({c['email_address']}) - {len(c['email_ids'])} emails - Distancia: {c['distance']:.4f}")
+
+    # results = db.search("enseñame el email en el que me dan la nota del examen extraordinario de cálculo", n_results=10, group_threads=True)
+    results = db.search_with_reranking("enseñame el email en el que me mandan la entrada del congreso try it del 2024", n_results=10, group_threads=True)
     print(f"\n Resultados de búsqueda:")
     print(f"Query: '{results['query']}'")
     print(f"Emails encontrados: {results['total']}")
-    
+    print(f"Mostrando los top {len(results['results'])} resultados:\n")
+    for idx, res in enumerate(results['results']):
+        if res.get('is_thread'):
+            print(f"------------------------ ID: {res['email_id']} --------------------------")
+            print(f"[{idx+1}] Hilo ({res['thread_size']} emails) - Subject: {res['subject']} - From: {res['from']} - Date: {res['date']} - Distancia: {res['best_distance']:.4f}")
+        else:
+            print(f"------------------------ ID: {res['email_id']} --------------------------")
+            print(f"[{idx+1}] Email - Subject: {res['subject']} - From: {res['from']} - Date: {res['date']} - Distancia: {res['best_distance']:.4f}")
 
     stats = db.get_stats()
     print(f"\n Estadísticas de la DB:")
     print(f"  - Total chunks: {stats['total_chunks']}")
-    print(f"  - Distribución: {stats['chunk_distribution']}")
-
-    # db.delete_collection()
+    print(f"  - Contactos: {stats.get('contacts_count', 0)}")
     
     return db
 
 
 if __name__ == "__main__":
+    json_path = "../data/processed/emails_processed.json"
+    emails_db_path = "../data/emails_vectordb"
+    contacts_db_path = "../data/emails_vectordb_contacts"
+    
+    # # #---ENRON---
+    # json_path = "../data/processed/enron_sample_10000+60.json"
+    # emails_db_path = "../data/test_vectordb"
+    # contacts_db_path = "../data/test_vectordb_contacts"
+    
     parser = argparse.ArgumentParser()
-    parser.add_argument('--run-tester', action='store_true', help='Ejecutar el tester de recuperación usando test_preguntas.txt')
+    parser.add_argument('--run-tester', action='store_true')
     parser.add_argument('--test-models', action='store_true', help='Probar múltiples modelos de embeddings')
-    parser.add_argument('--test-file', type=str, default='test_preguntas.txt', help='Ruta del archivo de tests (id \t pregunta)')
-    parser.add_argument('--json-path', type=str, default='../data/processed/enron_sample_1000+60.json', help='Ruta al archivo JSON con emails')
-    parser.add_argument('--topk', type=int, default=3, help='Valor K para recall@K')
-    parser.add_argument('--n-results', type=int, default=10, help='Número de resultados a recuperar por consulta')
-    parser.add_argument('--db-path', type=str, default='../data/test_vectordb', help='Ruta al vectordb de Chroma')
-    parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'cuda'], help='Dispositivo para los modelos (cpu/cuda)')
+    parser.add_argument('--test-file', type=str, default='test_preguntas.txt')
+    parser.add_argument('--json-path', type=str, default=json_path)
+    parser.add_argument('--topk', type=int, default=3)
+    parser.add_argument('--n-results', type=int, default=10)
+    parser.add_argument('--db-path', type=str, default=emails_db_path)
+    parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'cuda'])
     args = parser.parse_args()
 
     if args.test_models:
         test_multiple_models(
-            json_path=args.json_path,
+            json_path="../data/processed/enron_sample_1000+60.json",
             test_file=args.test_file,
             topk=args.topk,
             n_results=args.n_results,
             device=args.device
-        )
-    elif args.run_tester:
-        db = EmailVectorDB(db_path=args.db_path)
+    )
+    elif  args.run_tester:
+        db = EmailVectorDB(db_path="../data/test_vectordb")
         summary = run_retrieval_tester(db, args.test_file, topk=args.topk, n_results=args.n_results)
 
         print('\n--- Tester summary ---')
@@ -661,7 +969,5 @@ if __name__ == "__main__":
         print(f"Precision@1: {m['precision_at_1']:.3f}")
         print(f"MRR: {m['mrr']:.3f}")
         print(f"Recall@{args.topk}: {m[f'recall_at_{args.topk}']:.3f}")
-
     else:
-         
-        test_embeddings_and_db()
+        test_embeddings_and_db(json_path=json_path,emails_db_path=emails_db_path, contacts_db_path=contacts_db_path)

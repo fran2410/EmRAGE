@@ -22,15 +22,11 @@ class Email:
     bcc_addresses: List[str] = None
     subject: str = ""
     body: str = ""
-    content_type: Optional[str] = ""
-    encoding: Optional[str] = ""
-    x_from: Optional[str] = ""
-    x_to: Optional[str] = "" 
-    x_cc: Optional[str] = "" 
-    x_bcc: Optional[str] = "" 
-    x_folder: Optional[str] = "" 
-    x_origin: Optional[str] = "" 
-    x_filename: Optional[str] = "" 
+    thread_id: Optional[str] = ""
+    in_reply_to: Optional[str] = ""
+    references: Optional[str] = ""
+    x_filename: Optional[str] = ""
+    
 
     
     def to_dict(self) -> Dict:
@@ -137,16 +133,10 @@ class EnronDataLoader:
                 date=date_iso,
                 from_address=from_addr,
                 to_addresses=to_addrs,
+                cc_addresses=x_cc_addrs if x_cc_addrs else None,
+                bcc_addresses=x_bcc_addrs if x_bcc_addrs else None,
                 subject=headers.get("subject"),
                 body=headers.get("body",""),
-                content_type=headers.get("content_type"),
-                encoding=headers.get("content_transfer_encoding"),
-                x_from=headers.get("x_from"),
-                x_to=headers.get("x_to"),
-                x_cc=x_cc_addrs,
-                x_bcc=x_bcc_addrs,
-                x_folder=headers.get("x_folder"),
-                x_origin=headers.get("x_origin"),
                 x_filename=headers.get("x_filename"),
             )
             return email
@@ -209,7 +199,7 @@ class EnronDataLoader:
 
 
 def quick_test(csv_path: str):
-    loader = EnronDataLoader(csv_path, sample_size=1000)
+    loader = EnronDataLoader(csv_path, sample_size=10000)
     emails = loader.load_emails()
     
     if emails:
@@ -218,7 +208,7 @@ def quick_test(csv_path: str):
         print(f"  - Emails con body: {sum(1 for e in emails if e.body)}")
         print(f"  - Remitentes únicos: {len(set(e.from_address for e in emails))}")
         
-        loader.save_processed_emails("../data/processed/enron_sample_1000.json")
+        loader.save_processed_emails("../data/processed/enron_sample_10000+60.json")
     
     return emails
 

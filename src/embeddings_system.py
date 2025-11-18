@@ -15,200 +15,212 @@ import shutil
 
 
 class MultilingualEmbedder:
-    
-    def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", device: str = "cpu"):
+    def __init__(
+        self,
+        model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        device: str = "cpu",
+    ):
         print(f"Modelo: {model_name} (device: {device})")
         self.model = SentenceTransformer(model_name, device=device)
         self.embedding_dim = self.model.get_sentence_embedding_dimension()
-    
-    def encode(self, texts: List[str], batch_size: int = 32, show_progress: bool = True) -> np.ndarray:
+
+    def encode(
+        self, texts: List[str], batch_size: int = 32, show_progress: bool = True
+    ) -> np.ndarray:
         if not texts:
             return np.array([])
-        
+
         texts = [t if t else " " for t in texts]
-        
+
         embeddings = self.model.encode(
             texts,
             batch_size=batch_size,
             show_progress_bar=show_progress,
-            convert_to_numpy=True
+            convert_to_numpy=True,
         )
-        
+
         return embeddings
-    
+
     def encode_query(self, query: str) -> np.ndarray:
         return self.model.encode(query, convert_to_numpy=True)
 
 
 class ContactVectorDB:
-    
-    def __init__(self,
-                 db_path: str = "data/vectordb_contacts",
-                 collection_name: str = "contacts",
-                 embedder: Optional[MultilingualEmbedder] = None):
-        
+    def __init__(
+        self,
+        db_path: str = "data/vectordb_contacts",
+        collection_name: str = "contacts",
+        embedder: Optional[MultilingualEmbedder] = None,
+    ):
+
         self.db_path = Path(db_path)
         self.db_path.mkdir(parents=True, exist_ok=True)
-        
+
         self.embedder = embedder or MultilingualEmbedder()
-        
+
         print(f"Inicializando ContactDB en {self.db_path}")
         self.client = chromadb.PersistentClient(
             path=str(self.db_path),
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
-            )
+            settings=Settings(anonymized_telemetry=False, allow_reset=True),
         )
-        
+
         try:
             self.collection = self.client.get_collection(collection_name)
-            print(f"Colección '{collection_name}' cargada. Contactos: {self.collection.count()}")
+            print(
+                f"Colección '{collection_name}' cargada. Contactos: {self.collection.count()}"
+            )
         except:
             self.collection = self.client.create_collection(
                 name=collection_name,
-                metadata={"description": "Contact search collection"}
+                metadata={"description": "Contact search collection"},
             )
             print(f"Nueva colección '{collection_name}' creada")
-    
+
     def _extract_display_name(self, email_str: str) -> str:
-        match = re.match(r'^(.+?)\s*<(.+?)>$', email_str)
+        match = re.match(r"^(.+?)\s*<(.+?)>$", email_str)
         if match:
             return match.group(1).strip()
-        
-        if '@' in email_str:
-            username = email_str.split('@')[0]
-            return username.replace('.', ' ').replace('_', ' ')
-        
+
+        if "@" in email_str:
+            username = email_str.split("@")[0]
+            return username.replace(".", " ").replace("_", " ")
+
         return email_str
-    
+
     def _normalize_email(self, email_str: str) -> str:
-        match = re.search(r'<(.+?)>', email_str)
+        match = re.search(r"<(.+?)>", email_str)
         if match:
             return match.group(1).strip().lower()
         return email_str.strip().lower()
-    
+
     def index_contacts(self, emails: List[Any], batch_size: int = 100):
-        
+
         contact_map = {}
-        
+
         for email in tqdm(emails, desc="Extrayendo contactos"):
             all_addresses = []
-            
+
             if email.from_address:
-                all_addresses.append((email.from_address, 'sent'))
-            
-            for addr in (email.to_addresses or []):
-                all_addresses.append((addr, 'received'))
-            
-            for addr in (email.cc_addresses or []):
-                all_addresses.append((addr, 'received'))
-            
-            for addr in (email.bcc_addresses or []):
-                all_addresses.append((addr, 'received'))
-            
+                all_addresses.append((email.from_address, "sent"))
+
+            for addr in email.to_addresses or []:
+                all_addresses.append((addr, "received"))
+
+            for addr in email.cc_addresses or []:
+                all_addresses.append((addr, "received"))
+
+            for addr in email.bcc_addresses or []:
+                all_addresses.append((addr, "received"))
+
             for addr_str, role in all_addresses:
                 email_addr = self._normalize_email(addr_str)
-                
+
                 if email_addr not in contact_map:
                     contact_map[email_addr] = {
-                        'email': email_addr,
-                        'display_name': self._extract_display_name(addr_str),
-                        'sent_ids': [],
-                        'received_ids': []
+                        "email": email_addr,
+                        "display_name": self._extract_display_name(addr_str),
+                        "sent_ids": [],
+                        "received_ids": [],
                     }
-                
-                if role == 'sent':
-                    if email.id not in contact_map[email_addr]['sent_ids']:
-                        contact_map[email_addr]['sent_ids'].append(email.id)
+
+                if role == "sent":
+                    if email.id not in contact_map[email_addr]["sent_ids"]:
+                        contact_map[email_addr]["sent_ids"].append(email.id)
                 else:
-                    if email.id not in contact_map[email_addr]['received_ids']:
-                        contact_map[email_addr]['received_ids'].append(email.id)
-        
+                    if email.id not in contact_map[email_addr]["received_ids"]:
+                        contact_map[email_addr]["received_ids"].append(email.id)
+
         documents = []
         metadatas = []
         ids = []
-        
+
         for email_addr, contact_info in contact_map.items():
-            display_name = contact_info['display_name']
-            username = email_addr.split('@')[0].replace('.', ' ').replace('_', ' ')
-            
+            display_name = contact_info["display_name"]
+            username = email_addr.split("@")[0].replace(".", " ").replace("_", " ")
+
             doc_text = f"{display_name} {username} {email_addr}"
-            
+
             documents.append(doc_text)
-            metadatas.append({
-                'email_address': email_addr,
-                'display_name': display_name,
-                'sent_ids': json.dumps(contact_info['sent_ids']),
-                'received_ids': json.dumps(contact_info['received_ids']),
-                'total_emails': len(contact_info['sent_ids']) + len(contact_info['received_ids'])
-            })
+            metadatas.append(
+                {
+                    "email_address": email_addr,
+                    "display_name": display_name,
+                    "sent_ids": json.dumps(contact_info["sent_ids"]),
+                    "received_ids": json.dumps(contact_info["received_ids"]),
+                    "total_emails": len(contact_info["sent_ids"])
+                    + len(contact_info["received_ids"]),
+                }
+            )
             ids.append(f"contact_{email_addr}")
-        
+
         if not documents:
             print("No hay contactos para indexar")
             return
-        
+
         print(f"Indexando {len(documents)} contactos únicos...")
         embeddings = self.embedder.encode(documents, batch_size=batch_size)
-        
-        for i in tqdm(range(0, len(documents), batch_size), desc="Insertando contactos"):
+
+        for i in tqdm(
+            range(0, len(documents), batch_size), desc="Insertando contactos"
+        ):
             end_idx = min(i + batch_size, len(documents))
-            
+
             self.collection.add(
                 embeddings=embeddings[i:end_idx].tolist(),
                 documents=documents[i:end_idx],
                 metadatas=metadatas[i:end_idx],
-                ids=ids[i:end_idx]
+                ids=ids[i:end_idx],
             )
-        
+
         print(f"Total contactos en ContactDB: {self.collection.count()}")
-    
+
     def search_contacts(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
-        
+
         query_embedding = self.embedder.encode_query(query)
-        
+
         results = self.collection.query(
             query_embeddings=[query_embedding.tolist()],
             n_results=n_results,
-            include=["metadatas", "documents", "distances"]
+            include=["metadatas", "documents", "distances"],
         )
-        
-        if not results['ids'][0]:
+
+        if not results["ids"][0]:
             return []
-        
+
         contacts = []
-        for idx in range(len(results['ids'][0])):
-            metadata = results['metadatas'][0][idx]
-            
-            sent_ids = json.loads(metadata['sent_ids'])
-            received_ids = json.loads(metadata['received_ids'])
+        for idx in range(len(results["ids"][0])):
+            metadata = results["metadatas"][0][idx]
+
+            sent_ids = json.loads(metadata["sent_ids"])
+            received_ids = json.loads(metadata["received_ids"])
             all_ids = list(set(sent_ids + received_ids))
-            
-            contacts.append({
-                'email_address': metadata['email_address'],
-                'display_name': metadata['display_name'],
-                'email_ids': all_ids,
-                'sent_count': len(sent_ids),
-                'received_count': len(received_ids),
-                'distance': results['distances'][0][idx]
-            })
-        
+
+            contacts.append(
+                {
+                    "email_address": metadata["email_address"],
+                    "display_name": metadata["display_name"],
+                    "email_ids": all_ids,
+                    "sent_count": len(sent_ids),
+                    "received_count": len(received_ids),
+                    "distance": results["distances"][0][idx],
+                }
+            )
+
         return contacts
-    
+
     def delete_collection(self):
         try:
             self.client.delete_collection(self.collection.name)
             print(f"Colección '{self.collection.name}' eliminada")
         except Exception as e:
             print(f"Error eliminando colección: {e}")
-    
+
     def delete_db(self):
         try:
             self.client.delete_collection(self.collection.name)
         except:
             pass
-        
+
         try:
             if self.db_path.exists():
                 shutil.rmtree(self.db_path)
@@ -218,118 +230,121 @@ class ContactVectorDB:
 
 
 class EmailVectorDB:
-    def __init__(self, 
-                 db_path: str = "data/vectordb",
-                 collection_name: str = "emails",
-                 embedder: Optional[MultilingualEmbedder] = None,
-                 contact_db: Optional[ContactVectorDB] = None):
+    def __init__(
+        self,
+        db_path: str = "data/vectordb",
+        collection_name: str = "emails",
+        embedder: Optional[MultilingualEmbedder] = None,
+        contact_db: Optional[ContactVectorDB] = None,
+    ):
 
         self.db_path = Path(db_path)
         self.db_path.mkdir(parents=True, exist_ok=True)
-        
+
         self.embedder = embedder or MultilingualEmbedder()
-        
+
         print(f"Inicializando ChromaDB en {self.db_path}")
         self.client = chromadb.PersistentClient(
             path=str(self.db_path),
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
-            )
+            settings=Settings(anonymized_telemetry=False, allow_reset=True),
         )
-        
+
         try:
             self.collection = self.client.get_collection(collection_name)
-            print(f"Colección '{collection_name}' cargada. Documentos: {self.collection.count()}")
+            print(
+                f"Colección '{collection_name}' cargada. Documentos: {self.collection.count()}"
+            )
         except:
             self.collection = self.client.create_collection(
                 name=collection_name,
-                metadata={"description": "Email search collection"}
+                metadata={"description": "Email search collection"},
             )
             print(f"Nueva colección '{collection_name}' creada")
-        
+
         self.contact_db = contact_db
-        self.chunk_size = 300 
-        self.chunk_overlap = 50  
-    
-    def chunk_text(self, text: str, chunk_size: int = 300, overlap: int = 50) -> List[Tuple[str, int, int]]:
+        self.chunk_size = 300
+        self.chunk_overlap = 50
+
+    def chunk_text(
+        self, text: str, chunk_size: int = 300, overlap: int = 50
+    ) -> List[Tuple[str, int, int]]:
         if not text:
             return []
-        
+
         words = text.split()
         chunks = []
-        
+
         if len(words) <= chunk_size:
             return [(text, 0, len(text))]
-        
+
         for i in range(0, len(words), chunk_size - overlap):
-            chunk_words = words[i:i + chunk_size]
-            chunk_text = ' '.join(chunk_words)
-            
-            start_pos = len(' '.join(words[:i])) if i > 0 else 0
+            chunk_words = words[i : i + chunk_size]
+            chunk_text = " ".join(chunk_words)
+
+            start_pos = len(" ".join(words[:i])) if i > 0 else 0
             end_pos = start_pos + len(chunk_text)
-            
+
             chunks.append((chunk_text, start_pos, end_pos))
-            
+
             if i + chunk_size >= len(words):
                 break
-        
+
         return chunks
+
     def _normalize_text(self, text: str) -> str:
-          
-        text = re.sub(r'\s+', ' ', text)
-        
-          
-        text = re.sub(r'[=\-_]{3,}', ' ', text)
-        
-          
-        text = re.sub(r'http[s]?://\S+', '[URL]', text)
-        
-          
-        text = re.sub(r'\b[\w.]+@[\w.]+\b', '[EMAIL]', text)
-        
+
+        text = re.sub(r"\s+", " ", text)
+
+        text = re.sub(r"[=\-_]{3,}", " ", text)
+
+        text = re.sub(r"http[s]?://\S+", "[URL]", text)
+
+        text = re.sub(r"\b[\w.]+@[\w.]+\b", "[EMAIL]", text)
+
         return text.strip()
 
     def index_emails(self, emails: List[Any], batch_size: int = 100):
-        
+
         if self.contact_db:
             print("\n=== Indexando ContactDB ===")
             self.contact_db.index_contacts(emails, batch_size=batch_size)
-        
+
         print("\n=== Indexando EmailDB ===")
         documents = []
         metadatas = []
         ids = []
-        
+
         for email in tqdm(emails, desc="Preparando documentos"):
             email_docs, email_metas, email_ids = self._prepare_email_documents(email)
             documents.extend(email_docs)
             metadatas.extend(email_metas)
             ids.extend(email_ids)
-        
+
         if not documents:
             print("ERROR No hay documentos para indexar")
             return
-        
+
         print(f"Total de chunks a indexar: {len(documents)}")
-        
+
         print("Generando embeddings...")
         embeddings = self.embedder.encode(documents, batch_size=batch_size)
-        
+
         print("Insertando en ChromaDB...")
         for i in tqdm(range(0, len(documents), batch_size), desc="Insertando batches"):
             end_idx = min(i + batch_size, len(documents))
-            
+
             self.collection.add(
                 embeddings=embeddings[i:end_idx].tolist(),
                 documents=documents[i:end_idx],
                 metadatas=metadatas[i:end_idx],
-                ids=ids[i:end_idx]
+                ids=ids[i:end_idx],
             )
-        
+
         print(f"Total documentos en DB: {self.collection.count()}")
-    
-    def _prepare_email_documents(self, email: Any) -> Tuple[List[str], List[Dict], List[str]]:
+
+    def _prepare_email_documents(
+        self, email: Any
+    ) -> Tuple[List[str], List[Dict], List[str]]:
         documents = []
         metadatas = []
         ids = []
@@ -360,13 +375,15 @@ class EmailVectorDB:
             documents.append(doc_text)
 
             metadata = base_metadata.copy()
-            metadata.update({
-                "chunk_type": "subject_body",
-                "chunk_index": 0,
-                "chunk_start": 0,
-                "chunk_end": 0,
-                "total_chunks": 1
-            })
+            metadata.update(
+                {
+                    "chunk_type": "subject_body",
+                    "chunk_index": 0,
+                    "chunk_start": 0,
+                    "chunk_end": 0,
+                    "total_chunks": 1,
+                }
+            )
             metadatas.append(metadata)
             ids.append(doc_id)
             return documents, metadatas, ids
@@ -387,60 +404,61 @@ class EmailVectorDB:
             documents.append(doc_text)
 
             metadata = base_metadata.copy()
-            metadata.update({
-                "chunk_type": "subject_body",
-                "chunk_index": idx,
-                "chunk_start": start_pos,
-                "chunk_end": end_pos,
-                "total_chunks": total_chunks
-            })
+            metadata.update(
+                {
+                    "chunk_type": "subject_body",
+                    "chunk_index": idx,
+                    "chunk_start": start_pos,
+                    "chunk_end": end_pos,
+                    "total_chunks": total_chunks,
+                }
+            )
             metadatas.append(metadata)
             ids.append(doc_id)
 
         return documents, metadatas, ids
 
-    
-    def search_with_reranking(self, query: str, n_results: int = 10, 
-                            filter_metadata: Optional[Dict] = None,
-                            group_threads: bool = False) -> Dict[str, Any]:
-        
-          
+    def search_with_reranking(
+        self,
+        query: str,
+        n_results: int = 10,
+        filter_metadata: Optional[Dict] = None,
+        group_threads: bool = False,
+    ) -> Dict[str, Any]:
+
         initial_n = n_results * 3
         query_embedding = self.embedder.encode_query(query)
-        
+
         results = self.collection.query(
             query_embeddings=[query_embedding.tolist()],
             n_results=initial_n,
             where=filter_metadata,
-            include=["metadatas", "documents", "distances"]
+            include=["metadatas", "documents", "distances"],
         )
-        
-        if not results['ids'][0]:
+
+        if not results["ids"][0]:
             return {"query": query, "results": [], "total": 0}
-        
-          
+
         reranked_results = self._rerank_results(results, query)
-        
-          
+
         processed = self._process_search_results(
             reranked_results, query, group_threads=group_threads
         )
-        
-        processed['results'] = processed['results'][:n_results]
-        processed['total'] = len(processed['results'])
-        
+
+        processed["results"] = processed["results"][:n_results]
+        processed["total"] = len(processed["results"])
+
         return processed
 
     def _rerank_results(self, results: Dict, query: str) -> Dict:
         from sklearn.feature_extraction.text import TfidfVectorizer
         from sklearn.metrics.pairwise import cosine_similarity
-        
-        docs = results['documents'][0]
-        ids = results['ids'][0]
-        metadatas = results['metadatas'][0]
-        distances = results['distances'][0]
-        
-          
+
+        docs = results["documents"][0]
+        ids = results["ids"][0]
+        metadatas = results["metadatas"][0]
+        distances = results["distances"][0]
+
         vectorizer = TfidfVectorizer(max_features=1000)
         try:
             tfidf_matrix = vectorizer.fit_transform(docs + [query])
@@ -449,8 +467,7 @@ class EmailVectorDB:
             tfidf_scores = cosine_similarity(query_tfidf, doc_tfidf)[0]
         except:
             tfidf_scores = np.zeros(len(docs))
-        
-          
+
         query_terms = set(query.lower().split())
         bm25_scores = []
         for doc in docs:
@@ -458,214 +475,194 @@ class EmailVectorDB:
             matches = sum(1 for term in query_terms if term in doc_terms)
             score = matches / len(query_terms) if query_terms else 0
             bm25_scores.append(score)
-        
-          
-          
+
         max_dist = max(distances) if distances else 1
         norm_distances = [1 - (d / max_dist) for d in distances]
-        
-          
+
         combined_scores = []
         for i in range(len(docs)):
             score = (
-                0.5 * norm_distances[i] +        
-                0.3 * tfidf_scores[i] +           
-                0.2 * bm25_scores[i]              
+                0.5 * norm_distances[i] + 0.3 * tfidf_scores[i] + 0.2 * bm25_scores[i]
             )
             combined_scores.append(score)
-        
-          
+
         sorted_indices = np.argsort(combined_scores)[::-1]
-        
+
         return {
-            'ids': [[ids[i] for i in sorted_indices]],
-            'documents': [[docs[i] for i in sorted_indices]],
-            'metadatas': [[metadatas[i] for i in sorted_indices]],
-            'distances': [[1 - combined_scores[i] for i in sorted_indices]]    
+            "ids": [[ids[i] for i in sorted_indices]],
+            "documents": [[docs[i] for i in sorted_indices]],
+            "metadatas": [[metadatas[i] for i in sorted_indices]],
+            "distances": [[1 - combined_scores[i] for i in sorted_indices]],
         }
 
-    def _process_search_results(self, results: Dict, query: str, group_threads: bool = False) -> Dict[str, Any]:
+    def _process_search_results(
+        self, results: Dict, query: str, group_threads: bool = False
+    ) -> Dict[str, Any]:
 
-        if not results['ids'][0]:
+        if not results["ids"][0]:
             return {"query": query, "results": [], "total": 0}
-        
-          
+
         email_results = {}
-        
-        for idx, doc_id in enumerate(results['ids'][0]):
-            metadata = results['metadatas'][0][idx]
-            document = results['documents'][0][idx]
-            distance = results['distances'][0][idx]
-            
-            email_id = metadata['email_id']
-            
+
+        for idx, doc_id in enumerate(results["ids"][0]):
+            metadata = results["metadatas"][0][idx]
+            document = results["documents"][0][idx]
+            distance = results["distances"][0][idx]
+
+            email_id = metadata["email_id"]
+
             if email_id not in email_results:
                 email_results[email_id] = {
                     "email_id": email_id,
-                    "from": metadata.get('from', ''),
-                    "to": metadata.get('to', ''),
-                    "subject": metadata.get('subject', ''),
-                    "date": metadata.get('date', ''),
-                    "thread_id": metadata.get('thread_id', ''),
+                    "from": metadata.get("from", ""),
+                    "to": metadata.get("to", ""),
+                    "subject": metadata.get("subject", ""),
+                    "date": metadata.get("date", ""),
+                    "thread_id": metadata.get("thread_id", ""),
                     "chunks": [],
-                    "best_distance": distance
+                    "best_distance": distance,
                 }
-            
-            email_results[email_id]['chunks'].append({
-                "text": document,
-                "chunk_type": metadata.get('chunk_type', 'unknown'),
-                "chunk_index": metadata.get('chunk_index', 0),
-                "distance": distance
-            })
-            
-            if distance < email_results[email_id]['best_distance']:
-                email_results[email_id]['best_distance'] = distance
-        
-          
-        sorted_emails = sorted(email_results.values(), key=lambda x: x['best_distance'])
-        
-          
+
+            email_results[email_id]["chunks"].append(
+                {
+                    "text": document,
+                    "chunk_type": metadata.get("chunk_type", "unknown"),
+                    "chunk_index": metadata.get("chunk_index", 0),
+                    "distance": distance,
+                }
+            )
+
+            if distance < email_results[email_id]["best_distance"]:
+                email_results[email_id]["best_distance"] = distance
+
+        sorted_emails = sorted(email_results.values(), key=lambda x: x["best_distance"])
+
         if not group_threads:
             return {
                 "query": query,
                 "results": sorted_emails,
-                "total": len(sorted_emails)
+                "total": len(sorted_emails),
             }
-        
-          
+
         processed_threads = set()
         final_results = []
-        
+
         for email in sorted_emails:
-            thread_id = email.get('thread_id', '')
-            
-              
+            thread_id = email.get("thread_id", "")
+
             if not thread_id:
-                final_results.append({
-                    **email,
-                    "is_thread": False,
-                    "thread_emails": [email]
-                })
+                final_results.append(
+                    {**email, "is_thread": False, "thread_emails": [email]}
+                )
                 continue
-            
-              
+
             if thread_id in processed_threads:
                 continue
-            
-              
-            thread_emails = [e for e in sorted_emails if e.get('thread_id') == thread_id]
-            
-              
-              
+
+            thread_emails = [
+                e for e in sorted_emails if e.get("thread_id") == thread_id
+            ]
+
             if len(thread_emails) == 1:
-                final_results.append({
-                    **email,
-                    "is_thread": False,
-                    "thread_emails": [email]
-                })
+                final_results.append(
+                    {**email, "is_thread": False, "thread_emails": [email]}
+                )
                 processed_threads.add(thread_id)
                 continue
-              
-            
-              
+
             processed_threads.add(thread_id)
-            
-              
+
             thread_emails_sorted = sorted(
-                thread_emails, 
-                key=lambda x: x.get('date', '')
+                thread_emails, key=lambda x: x.get("date", "")
             )
-            
-              
-            best_email = min(thread_emails, key=lambda x: x['best_distance'])
-            
-              
-            final_results.append({
-                "email_id": best_email['email_id'],    
-                "from": best_email['from'],
-                "to": best_email['to'],
-                "subject": best_email['subject'],
-                "date": best_email['date'],
-                "thread_id": thread_id,
-                "chunks": best_email['chunks'],
-                "best_distance": best_email['best_distance'],
-                "is_thread": True,
-                "thread_size": len(thread_emails),
-                "thread_emails": thread_emails_sorted    
-            })
-        
-          
-        final_results.sort(key=lambda x: x['best_distance'])
-        
-        return {
-            "query": query,
-            "results": final_results,
-            "total": len(final_results)
-        }
-    
+
+            best_email = min(thread_emails, key=lambda x: x["best_distance"])
+
+            final_results.append(
+                {
+                    "email_id": best_email["email_id"],
+                    "from": best_email["from"],
+                    "to": best_email["to"],
+                    "subject": best_email["subject"],
+                    "date": best_email["date"],
+                    "thread_id": thread_id,
+                    "chunks": best_email["chunks"],
+                    "best_distance": best_email["best_distance"],
+                    "is_thread": True,
+                    "thread_size": len(thread_emails),
+                    "thread_emails": thread_emails_sorted,
+                }
+            )
+
+        final_results.sort(key=lambda x: x["best_distance"])
+
+        return {"query": query, "results": final_results, "total": len(final_results)}
+
     def delete_collection(self):
         try:
             self.client.delete_collection(self.collection.name)
             print(f"Colección '{self.collection.name}' eliminada")
         except Exception as e:
             print(f"Error eliminando colección: {e}")
-    
+
     def delete_db(self):
         try:
             self.client.delete_collection(self.collection.name)
             print(f"Colección '{self.collection.name}' eliminada")
         except Exception as e:
             print(f"Error eliminando colección: {e}")
-        
+
         try:
             if self.db_path.exists():
                 shutil.rmtree(self.db_path)
                 print(f"Base de datos eliminada: {self.db_path}")
         except Exception as e:
             print(f"Error eliminando directorio de BD: {e}")
-    
+
     def get_stats(self) -> Dict[str, Any]:
         count = self.collection.count()
-        
+
         if count > 0:
             try:
-                sample = self.collection.get(limit=min(count, 2000), include=["metadatas"]) 
-                metas = sample.get('metadatas', [])
+                sample = self.collection.get(
+                    limit=min(count, 2000), include=["metadatas"]
+                )
+                metas = sample.get("metadatas", [])
             except Exception:
-                sample = self.collection.get(limit=1000, include=["metadatas"]) 
-                metas = sample.get('metadatas', [])
-            
+                sample = self.collection.get(limit=1000, include=["metadatas"])
+                metas = sample.get("metadatas", [])
+
             chunk_types = {}
             for m in metas:
-                ct = m.get('chunk_type', 'unknown')
+                ct = m.get("chunk_type", "unknown")
                 chunk_types[ct] = chunk_types.get(ct, 0) + 1
         else:
             chunk_types = {}
-        
+
         stats = {
             "total_chunks": count,
             "db_path": str(self.db_path),
-            "embedding_dim": self.embedder.embedding_dim
+            "embedding_dim": self.embedder.embedding_dim,
         }
-        
+
         if self.contact_db:
             stats["contacts_count"] = self.contact_db.collection.count()
-        
+
         return stats
 
 
 def load_tests_from_tsv(test_path: str) -> List[Tuple[str, str]]:
     tests = []
-    with open(test_path, 'r', encoding='utf-8') as f:
+    with open(test_path, "r", encoding="utf-8") as f:
         for raw in f:
             line = raw.strip()
             if not line:
                 continue
-            if line.startswith('#'):
+            if line.startswith("#"):
                 continue
-             
-            if '\t' in line:
-                expected_id, question = line.split('\t', 1)
+
+            if "\t" in line:
+                expected_id, question = line.split("\t", 1)
             else:
                 parts = line.split(None, 1)
                 if len(parts) == 2:
@@ -679,15 +676,17 @@ def load_tests_from_tsv(test_path: str) -> List[Tuple[str, str]]:
 def get_email_ids_in_collection(db: EmailVectorDB) -> set:
     try:
         total = db.collection.count()
-        sample = db.collection.get(limit=max(1000, total), include=['metadatas'])
+        sample = db.collection.get(limit=max(1000, total), include=["metadatas"])
     except Exception:
-        sample = db.collection.get(limit=1000, include=['metadatas'])
-    metas = sample.get('metadatas', [])
-    ids = {m.get('email_id') for m in metas if m.get('email_id')}
+        sample = db.collection.get(limit=1000, include=["metadatas"])
+    metas = sample.get("metadatas", [])
+    ids = {m.get("email_id") for m in metas if m.get("email_id")}
     return ids
 
 
-def run_retrieval_tester(db: EmailVectorDB, test_file: str, topk: int = 3, n_results: int = 10) -> Dict[str, Any]:
+def run_retrieval_tester(
+    db: EmailVectorDB, test_file: str, topk: int = 3, n_results: int = 10
+) -> Dict[str, Any]:
     tests = load_tests_from_tsv(test_file)
     if not tests:
         raise ValueError(f"No tests found in {test_file}")
@@ -706,23 +705,27 @@ def run_retrieval_tester(db: EmailVectorDB, test_file: str, topk: int = 3, n_res
             p_at_1.append(0)
             mrr_scores.append(0)
             recall_at_k.append(0)
-            results_per_query.append({
-                'expected': expected_id,
-                'question': question,
-                'found': False,
-                'rank': None,
-                'top_ids': []
-            })
+            results_per_query.append(
+                {
+                    "expected": expected_id,
+                    "question": question,
+                    "found": False,
+                    "rank": None,
+                    "top_ids": [],
+                }
+            )
             continue
 
         # search_res = db.search(question, n_results=n_results, group_threads=True)
-        search_res = db.search_with_reranking(question, n_results=n_results, group_threads=True)
-        predicted_ids = [r['email_id'] for r in search_res.get('results', [])]
+        search_res = db.search_with_reranking(
+            question, n_results=n_results, group_threads=True
+        )
+        predicted_ids = [r["email_id"] for r in search_res.get("results", [])]
 
         rank = None
         if expected_id in predicted_ids:
             rank = predicted_ids.index(expected_id) + 1
-        
+
         p1 = 1 if predicted_ids and predicted_ids[0] == expected_id else 0
         p_at_1.append(p1)
 
@@ -732,31 +735,36 @@ def run_retrieval_tester(db: EmailVectorDB, test_file: str, topk: int = 3, n_res
         r_at_k = 1 if expected_id in predicted_ids[:topk] else 0
         recall_at_k.append(r_at_k)
 
-        results_per_query.append({
-            'expected': expected_id,
-            'question': question,
-            'found': rank is not None,
-            'rank': rank,
-            'top_ids': predicted_ids[:max(topk, 10)]
-        })
+        results_per_query.append(
+            {
+                "expected": expected_id,
+                "question": question,
+                "found": rank is not None,
+                "rank": rank,
+                "top_ids": predicted_ids[: max(topk, 10)],
+            }
+        )
 
     metrics = {
-        'n_queries': len(tests),
-        'n_missing_in_db': missing_in_db,
-        'precision_at_1': statistics.mean(p_at_1) if p_at_1 else 0.0,
-        'mrr': statistics.mean(mrr_scores) if mrr_scores else 0.0,
-        f'recall_at_{topk}': statistics.mean(recall_at_k) if recall_at_k else 0.0,
+        "n_queries": len(tests),
+        "n_missing_in_db": missing_in_db,
+        "precision_at_1": statistics.mean(p_at_1) if p_at_1 else 0.0,
+        "mrr": statistics.mean(mrr_scores) if mrr_scores else 0.0,
+        f"recall_at_{topk}": statistics.mean(recall_at_k) if recall_at_k else 0.0,
     }
 
-    summary = {
-        'metrics': metrics,
-        'per_query': results_per_query
-    }
+    summary = {"metrics": metrics, "per_query": results_per_query}
 
     return summary
 
 
-def test_multiple_models(json_path: str, test_file: str, topk: int = 3, n_results: int = 10, device: str = "cpu"):
+def test_multiple_models(
+    json_path: str,
+    test_file: str,
+    topk: int = 3,
+    n_results: int = 10,
+    device: str = "cpu",
+):
     import torch
     import gc
 
@@ -767,7 +775,7 @@ def test_multiple_models(json_path: str, test_file: str, topk: int = 3, n_result
         "sentence-transformers/all-MiniLM-L6-v2",
         "sentence-transformers/paraphrase-MiniLM-L6-v2",
         "sentence-transformers/all-MiniLM-L12-v2",
-        "sentence-transformers/all-mpnet-base-v2"
+        "sentence-transformers/all-mpnet-base-v2",
     ]
 
     print(f"\n{'='*80}")
@@ -787,11 +795,13 @@ def test_multiple_models(json_path: str, test_file: str, topk: int = 3, n_result
         print(f"PROBANDO MODELO: {model_name}")
         print(f"{'='*80}\n")
 
-        db_path = f"../data/test_vectordb_{model_name.replace('/', '_').replace('-', '_')}"
+        db_path = (
+            f"../data/test_vectordb_{model_name.replace('/', '_').replace('-', '_')}"
+        )
 
         db = None
         embedder = None
-        start_time = time.perf_counter()   
+        start_time = time.perf_counter()
 
         try:
             if torch.cuda.is_available():
@@ -805,15 +815,17 @@ def test_multiple_models(json_path: str, test_file: str, topk: int = 3, n_result
             db.index_emails(emails, batch_size=32)
 
             print(f"\nEjecutando tests desde {test_file}...")
-            summary = run_retrieval_tester(db, test_file, topk=topk, n_results=n_results)
+            summary = run_retrieval_tester(
+                db, test_file, topk=topk, n_results=n_results
+            )
 
-            elapsed_time = time.perf_counter() - start_time   
+            elapsed_time = time.perf_counter() - start_time
 
-            all_results[model_name] = summary['metrics']
-            all_results[model_name]['execution_time_sec'] = round(elapsed_time, 2)   
+            all_results[model_name] = summary["metrics"]
+            all_results[model_name]["execution_time_sec"] = round(elapsed_time, 2)
 
             print(f"\n--- Resultados para {model_name} ---")
-            m = summary['metrics']
+            m = summary["metrics"]
             print(f"Tiempo total: {elapsed_time:.2f} s")
             print(f"Queries: {m['n_queries']}")
             print(f"Missing expected IDs in DB: {m['n_missing_in_db']}")
@@ -824,11 +836,11 @@ def test_multiple_models(json_path: str, test_file: str, topk: int = 3, n_result
         except Exception as e:
             elapsed_time = time.perf_counter() - start_time
             all_results[model_name] = {
-                'error': str(e),
-                'execution_time_sec': round(elapsed_time, 2),
-                'precision_at_1': 0.0,
-                'mrr': 0.0,
-                f'recall_at_{topk}': 0.0
+                "error": str(e),
+                "execution_time_sec": round(elapsed_time, 2),
+                "precision_at_1": 0.0,
+                "mrr": 0.0,
+                f"recall_at_{topk}": 0.0,
             }
             print(f"\nError con modelo {model_name}: {e}")
             print(f"Tiempo antes del fallo: {elapsed_time:.2f} s")
@@ -846,50 +858,50 @@ def test_multiple_models(json_path: str, test_file: str, topk: int = 3, n_result
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             gc.collect()
-    
-     
+
     print(f"\n{'='*80}")
     print("RESUMEN COMPARATIVO DE TODOS LOS MODELOS")
     print(f"{'='*80}\n")
-    
+
     print(f"{'Modelo':<50} {'P@1':<8} {'MRR':<8} {'R@{topk}':<8}")
     print(f"{'-'*80}")
-    
+
     for model_name, metrics in all_results.items():
-        if 'error' not in metrics:
-            print(f"{model_name:<50} {metrics['precision_at_1']:<8.3f} {metrics['mrr']:<8.3f} {metrics[f'recall_at_{topk}']:<8.3f}")
+        if "error" not in metrics:
+            print(
+                f"{model_name:<50} {metrics['precision_at_1']:<8.3f} {metrics['mrr']:<8.3f} {metrics[f'recall_at_{topk}']:<8.3f}"
+            )
         else:
             print(f"{model_name:<50} ERROR")
-    
-     
-    valid_results = {k: v for k, v in all_results.items() if 'error' not in v}
-    
+
+    valid_results = {k: v for k, v in all_results.items() if "error" not in v}
+
     if valid_results:
-        best_model_mrr = max(valid_results.items(), 
-                             key=lambda x: x[1].get('mrr', 0))
-        best_model_p1 = max(valid_results.items(), 
-                            key=lambda x: x[1].get('precision_at_1', 0))
-        
+        best_model_mrr = max(valid_results.items(), key=lambda x: x[1].get("mrr", 0))
+        best_model_p1 = max(
+            valid_results.items(), key=lambda x: x[1].get("precision_at_1", 0)
+        )
+
         print(f"\n{'='*80}")
-        print(f"Mejor modelo por MRR: {best_model_mrr[0]} (MRR: {best_model_mrr[1].get('mrr', 0):.3f})")
-        print(f"Mejor modelo por P@1: {best_model_p1[0]} (P@1: {best_model_p1[1].get('precision_at_1', 0):.3f})")
+        print(
+            f"Mejor modelo por MRR: {best_model_mrr[0]} (MRR: {best_model_mrr[1].get('mrr', 0):.3f})"
+        )
+        print(
+            f"Mejor modelo por P@1: {best_model_p1[0]} (P@1: {best_model_p1[1].get('precision_at_1', 0):.3f})"
+        )
         print(f"{'='*80}\n")
     else:
         print("\nNingún modelo se ejecutó correctamente\n")
-    
-     
+
     output_file = "../data/processed/model_comparison_results.json"
-    with open(output_file, 'w', encoding='utf-8') as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False, indent=4)
     print(f"Resultados guardados en: {output_file}")
-    
+
     return all_results
 
 
- 
-
-
-def test_embeddings_and_db( json_path: str, emails_db_path: str, contacts_db_path: str):
+def test_embeddings_and_db(json_path: str, emails_db_path: str, contacts_db_path: str):
     with open(json_path, "r", encoding="utf-8") as f:
         emails_data = json.load(f)
 
@@ -900,32 +912,46 @@ def test_embeddings_and_db( json_path: str, emails_db_path: str, contacts_db_pat
     db = EmailVectorDB(db_path=emails_db_path, embedder=embedder, contact_db=contact_db)
 
     print(f"Cargando emails desde {json_path} ({len(emails)} encontrados)")
-    # db.index_emails(emails)
+    db.index_emails(emails)
 
     print("\n=== Test búsqueda por contacto ===")
     contacts = contact_db.search_contacts("sergio", n_results=10)
     for c in contacts:
-        print(f"  {c['display_name']} ({c['email_address']}) - {len(c['email_ids'])} emails - Distancia: {c['distance']:.4f}")
+        print(
+            f"  {c['display_name']} ({c['email_address']}) - {len(c['email_ids'])} emails - Distancia: {c['distance']:.4f}"
+        )
 
     # results = db.search("enseñame el email en el que me dan la nota del examen extraordinario de cálculo", n_results=10, group_threads=True)
-    results = db.search_with_reranking("enseñame el email en el que me mandan la entrada del congreso try it del 2024", n_results=10, group_threads=True)
+    results = db.search_with_reranking(
+        "enseñame el email en el que me mandan la entrada del congreso try it del 2024",
+        n_results=10,
+        group_threads=True,
+    )
     print(f"\n Resultados de búsqueda:")
     print(f"Query: '{results['query']}'")
     print(f"Emails encontrados: {results['total']}")
     print(f"Mostrando los top {len(results['results'])} resultados:\n")
-    for idx, res in enumerate(results['results']):
-        if res.get('is_thread'):
-            print(f"------------------------ ID: {res['email_id']} --------------------------")
-            print(f"[{idx+1}] Hilo ({res['thread_size']} emails) - Subject: {res['subject']} - From: {res['from']} - Date: {res['date']} - Distancia: {res['best_distance']:.4f}")
+    for idx, res in enumerate(results["results"]):
+        if res.get("is_thread"):
+            print(
+                f"------------------------ ID: {res['email_id']} --------------------------"
+            )
+            print(
+                f"[{idx+1}] Hilo ({res['thread_size']} emails) - Subject: {res['subject']} - From: {res['from']} - Date: {res['date']} - Distancia: {res['best_distance']:.4f}"
+            )
         else:
-            print(f"------------------------ ID: {res['email_id']} --------------------------")
-            print(f"[{idx+1}] Email - Subject: {res['subject']} - From: {res['from']} - Date: {res['date']} - Distancia: {res['best_distance']:.4f}")
+            print(
+                f"------------------------ ID: {res['email_id']} --------------------------"
+            )
+            print(
+                f"[{idx+1}] Email - Subject: {res['subject']} - From: {res['from']} - Date: {res['date']} - Distancia: {res['best_distance']:.4f}"
+            )
 
     stats = db.get_stats()
     print(f"\n Estadísticas de la DB:")
     print(f"  - Total chunks: {stats['total_chunks']}")
     print(f"  - Contactos: {stats.get('contacts_count', 0)}")
-    
+
     return db
 
 
@@ -933,21 +959,25 @@ if __name__ == "__main__":
     json_path = "../data/processed/emails_processed.json"
     emails_db_path = "../data/emails_vectordb"
     contacts_db_path = "../data/emails_vectordb_contacts"
-    
+
     # # #---ENRON---
     # json_path = "../data/processed/enron_sample_10000+60.json"
     # emails_db_path = "../data/test_vectordb"
     # contacts_db_path = "../data/test_vectordb_contacts"
-    
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--run-tester', action='store_true')
-    parser.add_argument('--test-models', action='store_true', help='Probar múltiples modelos de embeddings')
-    parser.add_argument('--test-file', type=str, default='test_preguntas.txt')
-    parser.add_argument('--json-path', type=str, default=json_path)
-    parser.add_argument('--topk', type=int, default=3)
-    parser.add_argument('--n-results', type=int, default=10)
-    parser.add_argument('--db-path', type=str, default=emails_db_path)
-    parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'cuda'])
+    parser.add_argument("--run-tester", action="store_true")
+    parser.add_argument(
+        "--test-models",
+        action="store_true",
+        help="Probar múltiples modelos de embeddings",
+    )
+    parser.add_argument("--test-file", type=str, default="test_preguntas.txt")
+    parser.add_argument("--json-path", type=str, default=json_path)
+    parser.add_argument("--topk", type=int, default=3)
+    parser.add_argument("--n-results", type=int, default=10)
+    parser.add_argument("--db-path", type=str, default=emails_db_path)
+    parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "cuda"])
     args = parser.parse_args()
 
     if args.test_models:
@@ -956,18 +986,24 @@ if __name__ == "__main__":
             test_file=args.test_file,
             topk=args.topk,
             n_results=args.n_results,
-            device=args.device
-    )
-    elif  args.run_tester:
+            device=args.device,
+        )
+    elif args.run_tester:
         db = EmailVectorDB(db_path="../data/test_vectordb")
-        summary = run_retrieval_tester(db, args.test_file, topk=args.topk, n_results=args.n_results)
+        summary = run_retrieval_tester(
+            db, args.test_file, topk=args.topk, n_results=args.n_results
+        )
 
-        print('\n--- Tester summary ---')
-        m = summary['metrics']
+        print("\n--- Tester summary ---")
+        m = summary["metrics"]
         print(f"Queries: {m['n_queries']}")
         print(f"Missing expected IDs in DB: {m['n_missing_in_db']}")
         print(f"Precision@1: {m['precision_at_1']:.3f}")
         print(f"MRR: {m['mrr']:.3f}")
         print(f"Recall@{args.topk}: {m[f'recall_at_{args.topk}']:.3f}")
     else:
-        test_embeddings_and_db(json_path=json_path,emails_db_path=emails_db_path, contacts_db_path=contacts_db_path)
+        test_embeddings_and_db(
+            json_path=json_path,
+            emails_db_path=emails_db_path,
+            contacts_db_path=contacts_db_path,
+        )

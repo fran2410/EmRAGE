@@ -1,0 +1,67 @@
+X-UIDL: 0000000000000000
+X-Mozilla-Status: 0000
+X-Mozilla-Status2: 00000000
+X-Mozilla-Keys:                                                                                 
+Return-Path: <anonymous@example.com>
+Delivered-To: user@example.com
+Received: from mailserver.example.com
+	by mx.example.com with LMTP
+	id A1B2C3D4E5F6
+	(envelope-from <anonymous@example.com>)
+	for <user@example.com>; Mon, 01 Jan 2024 12:00:00 +0000
+Received: by mailserver.example.com (Postfix, from userid 999)
+	id 123456789A; Mon, 01 Jan 2024 12:00:00 +0000 (UTC)
+X-Spam-Checker-Version: SpamAssassin 3.4.6 (2021-04-09) on
+	mx.example.com
+Received: from relay.example.com (relay.example.com [192.168.1.100])
+	by mailserver.example.com (Postfix) with ESMTP id B2C3D4E5F6
+	for <user@example.com>; Mon, 01 Jan 2024 12:00:00 +0000 (UTC)
+Received: from [127.0.0.1] (webapp.example.com [10.0.0.50])
+        by relay.example.com (8.15.2/8.15.2/Relay-v1-001) with ESMTPS id 12AbCdEf001001
+        (version=TLSv1.2 cipher=ECDHE-RSA-AES256-GCM-SHA384 bits=256 verify=NOT)
+        for <user@example.com>; Mon, 01 Jan 2024 12:00:00 GMT
+To: user@example.com
+Subject: =?utf-8?Q?Lorem_ipsum_dolor_sit_amet?=
+from: Anonymous Sender <anonymous@example.com>
+Message-ID: <a1b2c3d4e5f6a1b2c3d4e5f6@example.com>
+MIME-Version: 1.0
+Date: Mon, 01 Jan 2024 14:00:00 +0200
+Content-Type: multipart/alternative; boundary=xyz123abc456
+
+--xyz123abc456
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tem=
+por incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, q=
+uis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo cons=
+equat.=20
+
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolor=
+e eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident,=
+ sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium =
+doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore=
+ veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+
+--xyz123abc456
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod =
+tempor incididunt ut labore et dolore magna aliqua.</p>
+
+<p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi =
+ut aliquip ex ea commodo consequat.</p>
+
+<p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum do=
+lore eu fugiat nulla pariatur.</p>
+
+<p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui offici=
+a deserunt mollit anim id est laborum.</p>
+
+<p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusanti=
+um doloremque laudantium.</p>
+
+--xyz123abc456--

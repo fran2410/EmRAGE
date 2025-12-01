@@ -685,7 +685,7 @@ def get_email_ids_in_collection(db: EmailVectorDB) -> set:
 
 
 def run_retrieval_tester(
-    db: EmailVectorDB, test_file: str, topk: int = 3, n_results: int = 10
+    db: EmailVectorDB, test_file: str, topk: int = 3, n_results: int = 10, use_mrr: bool = False
 ) -> Dict[str, Any]:
     tests = load_tests_from_tsv(test_file)
     if not tests:
@@ -695,16 +695,20 @@ def run_retrieval_tester(
 
     results_per_query = []
     p_at_1 = []
+    p_at_3 = []
+    p_at_10 = []
     mrr_scores = []
-    recall_at_k = []
     missing_in_db = 0
 
     for expected_id, question in tqdm(tests, desc="Ejecutando tests"):
         if expected_id not in present_ids:
+            print(f"ID esperado no encontrado en DB: {expected_id}")
             missing_in_db += 1
             p_at_1.append(0)
-            mrr_scores.append(0)
-            recall_at_k.append(0)
+            p_at_3.append(0)
+            p_at_10.append(0)
+            if use_mrr:
+                mrr_scores.append(0)
             results_per_query.append(
                 {
                     "expected": expected_id,
@@ -716,7 +720,6 @@ def run_retrieval_tester(
             )
             continue
 
-        # search_res = db.search(question, n_results=n_results, group_threads=True)
         search_res = db.search_with_reranking(
             question, n_results=n_results, group_threads=True
         )
@@ -729,11 +732,15 @@ def run_retrieval_tester(
         p1 = 1 if predicted_ids and predicted_ids[0] == expected_id else 0
         p_at_1.append(p1)
 
-        rr = 1.0 / rank if rank else 0.0
-        mrr_scores.append(rr)
+        p3 = 1 if expected_id in predicted_ids[:3] else 0
+        p_at_3.append(p3)
 
-        r_at_k = 1 if expected_id in predicted_ids[:topk] else 0
-        recall_at_k.append(r_at_k)
+        p10 = 1 if expected_id in predicted_ids[:10] else 0
+        p_at_10.append(p10)
+        
+        if use_mrr:
+            rr = 1.0 / rank if rank else 0.0
+            mrr_scores.append(rr)
 
         results_per_query.append(
             {
@@ -749,9 +756,13 @@ def run_retrieval_tester(
         "n_queries": len(tests),
         "n_missing_in_db": missing_in_db,
         "precision_at_1": statistics.mean(p_at_1) if p_at_1 else 0.0,
-        "mrr": statistics.mean(mrr_scores) if mrr_scores else 0.0,
-        f"recall_at_{topk}": statistics.mean(recall_at_k) if recall_at_k else 0.0,
     }
+    
+    if use_mrr:
+        metrics["mrr"] = statistics.mean(mrr_scores) if mrr_scores else 0.0
+    else:
+        metrics["precision_at_3"] = statistics.mean(p_at_3) if p_at_3 else 0.0
+        metrics["precision_at_10"] = statistics.mean(p_at_10) if p_at_10 else 0.0
 
     summary = {"metrics": metrics, "per_query": results_per_query}
 
@@ -761,9 +772,12 @@ def run_retrieval_tester(
 def test_multiple_models(
     json_path: str,
     test_file: str,
+    output_file: str,
     topk: int = 3,
     n_results: int = 10,
     device: str = "cpu",
+    use_mrr: bool = False,
+    
 ):
     import torch
     import gc
@@ -816,7 +830,7 @@ def test_multiple_models(
 
             print(f"\nEjecutando tests desde {test_file}...")
             summary = run_retrieval_tester(
-                db, test_file, topk=topk, n_results=n_results
+                db, test_file, topk=topk, n_results=n_results, use_mrr=use_mrr
             )
 
             elapsed_time = time.perf_counter() - start_time
@@ -830,8 +844,10 @@ def test_multiple_models(
             print(f"Queries: {m['n_queries']}")
             print(f"Missing expected IDs in DB: {m['n_missing_in_db']}")
             print(f"Precision@1: {m['precision_at_1']:.3f}")
-            print(f"MRR: {m['mrr']:.3f}")
-            print(f"Recall@{topk}: {m[f'recall_at_{topk}']:.3f}")
+            if use_mrr:
+                print(f"MRR: {m['mrr']:.3f}")
+            else:
+                print(f"Precision@3: {m['precision_at_3']:.3f}")
 
         except Exception as e:
             elapsed_time = time.perf_counter() - start_time
@@ -839,11 +855,11 @@ def test_multiple_models(
                 "error": str(e),
                 "execution_time_sec": round(elapsed_time, 2),
                 "precision_at_1": 0.0,
-                "mrr": 0.0,
-                f"recall_at_{topk}": 0.0,
             }
-            print(f"\nError con modelo {model_name}: {e}")
-            print(f"Tiempo antes del fallo: {elapsed_time:.2f} s")
+            if use_mrr:
+                all_results[model_name]["mrr"] = 0.0
+            else:
+                all_results[model_name]["precision_at_3"] = 0.0
 
         finally:
             try:
@@ -863,13 +879,14 @@ def test_multiple_models(
     print("RESUMEN COMPARATIVO DE TODOS LOS MODELOS")
     print(f"{'='*80}\n")
 
-    print(f"{'Modelo':<50} {'P@1':<8} {'MRR':<8} {'R@{topk}':<8}")
+    metric_key = "mrr" if use_mrr else "precision_at_3"
+    print(f"{'Modelo':<50} {'P@1':<8} {metric_key.upper():<8}")
     print(f"{'-'*80}")
 
     for model_name, metrics in all_results.items():
         if "error" not in metrics:
             print(
-                f"{model_name:<50} {metrics['precision_at_1']:<8.3f} {metrics['mrr']:<8.3f} {metrics[f'recall_at_{topk}']:<8.3f}"
+                f"{model_name:<50} {metrics['precision_at_1']:<8.3f} {metrics[metric_key]:<8.3f}"
             )
         else:
             print(f"{model_name:<50} ERROR")
@@ -877,23 +894,20 @@ def test_multiple_models(
     valid_results = {k: v for k, v in all_results.items() if "error" not in v}
 
     if valid_results:
-        best_model_mrr = max(valid_results.items(), key=lambda x: x[1].get("mrr", 0))
+        best_model_metric = max(valid_results.items(), key=lambda x: x[1].get(metric_key, 0))
         best_model_p1 = max(
             valid_results.items(), key=lambda x: x[1].get("precision_at_1", 0)
         )
 
         print(f"\n{'='*80}")
         print(
-            f"Mejor modelo por MRR: {best_model_mrr[0]} (MRR: {best_model_mrr[1].get('mrr', 0):.3f})"
+            f"Mejor modelo por {metric_key.upper()}: {best_model_metric[0]} ({metric_key.upper()}: {best_model_metric[1].get(metric_key, 0):.3f})"
         )
         print(
             f"Mejor modelo por P@1: {best_model_p1[0]} (P@1: {best_model_p1[1].get('precision_at_1', 0):.3f})"
         )
         print(f"{'='*80}\n")
-    else:
-        print("\nNingún modelo se ejecutó correctamente\n")
-
-    output_file = "../data/processed/model_comparison_results.json"
+        
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False, indent=4)
     print(f"Resultados guardados en: {output_file}")
@@ -965,6 +979,9 @@ if __name__ == "__main__":
     # emails_db_path = "../data/test_vectordb"
     # contacts_db_path = "../data/test_vectordb_contacts"
 
+    test_path = "test_preguntas_146.txt"
+    data_json_path = "../data/processed/enron_sample_1000+166+noise.json"
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-tester", action="store_true")
     parser.add_argument(
@@ -972,26 +989,31 @@ if __name__ == "__main__":
         action="store_true",
         help="Probar múltiples modelos de embeddings",
     )
-    parser.add_argument("--test-file", type=str, default="test_preguntas.txt")
+    parser.add_argument("--test-file", type=str, default="test_preguntas_146.txt")
     parser.add_argument("--json-path", type=str, default=json_path)
     parser.add_argument("--topk", type=int, default=3)
     parser.add_argument("--n-results", type=int, default=10)
     parser.add_argument("--db-path", type=str, default=emails_db_path)
     parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "cuda"])
+    parser.add_argument("--use-mrr", action="store_true", help="Usar MRR en vez de Precision@3")
     args = parser.parse_args()
 
     if args.test_models:
+        # Determinar qué JSON usar según el modo
+        
         test_multiple_models(
-            json_path="../data/processed/enron_sample_1000+60.json",
-            test_file=args.test_file,
+            json_path=data_json_path,
+            test_file=test_path,
             topk=args.topk,
             n_results=args.n_results,
             device=args.device,
+            use_mrr=args.use_mrr,
+            output_file=data_json_path.replace("enron_sample", "model_comparison"),
         )
     elif args.run_tester:
         db = EmailVectorDB(db_path="../data/test_vectordb")
         summary = run_retrieval_tester(
-            db, args.test_file, topk=args.topk, n_results=args.n_results
+            db, args.test_file, topk=args.topk, n_results=args.n_results, use_mrr=args.use_mrr
         )
 
         print("\n--- Tester summary ---")
@@ -999,8 +1021,10 @@ if __name__ == "__main__":
         print(f"Queries: {m['n_queries']}")
         print(f"Missing expected IDs in DB: {m['n_missing_in_db']}")
         print(f"Precision@1: {m['precision_at_1']:.3f}")
-        print(f"MRR: {m['mrr']:.3f}")
-        print(f"Recall@{args.topk}: {m[f'recall_at_{args.topk}']:.3f}")
+        if args.use_mrr:
+            print(f"MRR: {m['mrr']:.3f}")
+        else:
+            print(f"Precision@3: {m['precision_at_3']:.3f}")
     else:
         test_embeddings_and_db(
             json_path=json_path,

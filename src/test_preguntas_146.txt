@@ -1,0 +1,146 @@
+a1b2c3d4e5f6	¿Quién propuso iniciar la discusión sobre metadatos FAIR en octubre?
+a3b4c5d6e7f8	¿Cuándo es el deadline del reporte anual del proyecto SemanticData?
+b4c5d6e7f8g9	¿Cuándo empieza mi PhD si me aprueban la beca ColFuturo?
+c5d6e7f8g9h0	¿Qué demo envié a ISWC 2024?
+d6e7f8g9h0i1	¿Para qué período apliqué como mentor en el programa ACM?
+e7f8g9h0i1j2	¿Para qué paper solicité el Reproducibility Badge en SIGMOD?
+f8g9h0i1j2k3	¿Qué evento propuse organizar en EKAW 2024 el 26 de noviembre?
+g9h0i1j2k3l4	¿Sobre qué método quiero solicitar una patente?
+h0i1j2k3l4m5	¿Cuándo propuse hacer el kick-off del proyecto MadridKG?
+i1j2k3l4m5n6    ¿En qué fechas organizo el Wikidata Workshop en Madrid?
+j2k3l4m5n6o7	¿Para qué artículo solicité publicar un erratum?
+k3l4m5n6o7p8	¿Cuánto gasté en total en el viaje a ISWC 2024 en Baltimore?
+l4m5n6o7p8q9	¿Qué W3C Community Group propuse crear?
+m5n6o7p8q9r0	¿Para qué período solicité el año sabático en Stanford?
+n6o7p8q9r0s1	¿Qué sesión temática propuse para EGI Conference 2025?
+b2c3d4e5f6g7	¿Qué días propuso Carlos para la reunión de metadatos FAIR?
+c3d4e5f6g7h8	¿Qué aspecto de FAIR le preocupaba a Mark antes de la reunión?
+d4e5f6g7h8i9	¿De dónde traería Tomasz ejemplos para la discusión de FAIR?
+e5f6g7h8i9j0	¿Cuál fue la conclusión de la discusión sobre metadatos FAIR entre Mark y Tomasz de Octubre?
+f6g7h8i9j0k1	¿Cuándo tiene que completar Mark el setup del repositorio?
+g7h8i9j0k1l2	¿Qué clases de schema.org propuso Tomasz para el mapeo de vocabulario?
+h8i9j0k1l2m3	¿Cuánto presupuesto se aprobó para el proyecto FAIR?
+i9j0k1l2m3n4	¿Cuándo es el demo para stakeholders del proyecto FAIR?
+j0k1l2m3n4o5	¿Qué solución de repositorio sugirió el departamento de IT a Mark?
+k1l2m3n4o5p6	¿En qué consorcios participé en Junio de 2024?
+l2m3n4o5p6q7	¿A qué alianzas o consorcios me uní en Junio?
+m3n4o5p6q7r8	¿De qué consorcio fui nombrada miembro del board en Junio?
+n4o5p6q7r8s9	¿En qué fecha accedí a dar un Keynote en el Wikidata workshop?
+o5p6q7r8s9t0	¿Cuándo tengo que entregar el deliverable D3.4 del proyecto DeepGraph?
+p6q7r8s9t0u1	¿Envié el previaje a Budapest a admin-oeg?
+q7r8s9t0u1v2	¿Admin-oeg procesó mi previaje a Budapest o me lo devolvieron?
+r8s9t0u1v2w3	¿Cuál era el deadline del grant proposal HORIZON-KG-2024?
+s9t0u1v2w3x4	¿Qué fecha preferí para el workshop KG4IA en ISWC 2024?
+t0u1v2w3x4y5	¿Cuándo empezaba el contrato de Andrea Moreno como PhD student?
+u1v2w3x4y5z6	¿Cuál era el deadline para el capítulo del libro de Semantic Web Technologies?
+v2w3x4y5z6a7	¿Cuándo programé el mantenimiento del servidor de triple store?
+w3x4y5z6a7b8	¿Qué deadline sugerí para las revisiones del manuscript WS-2024-0234?
+x4y5z6a7b8c9	¿En qué fechas propuse dar el curso de SPARQL avanzado en la Summer School?
+y5z6a7b8c9d0	¿Para cuándo necesito que entreguen el servidor GPU que pedí?
+z6a7b8c9d0e1	¿Cuándo organicé el hackathon de DBpedia en Madrid?
+a7b8c9d0e1f2	¿En qué fecha está programada mi defensa de tesis PhD?
+b8c9d0e1f2g3	¿Cuándo expira nuestra licencia actual de GraphDB Enterprise?
+c9d0e1f2g3h4	¿Cuál es el deadline de submissions para el special issue de Healthcare Knowledge Graphs?
+d0e1f2g3h4i5	¿Qué tutorial propuse para ESWC 2025?
+e1f2g3h4i5j6	¿Cuándo es el kick-off meeting del proyecto con Telefonica?
+f2g3h4i5j6k7	¿Para qué fecha propuse empezar la Marie Curie Fellowship?
+g3h4i5j6k7l8	¿Cuándo compré el laptop Dell XPS para Laura Campos?
+h4i5j6k7l8m9	¿Cuándo llega el visiting researcher Dr. Chen de Tsinghua?
+i5j6k7l8m9n0	¿En qué fecha envié la revisión del manuscript JDSA-2024-156?
+j6k7l8m9n0o1	¿Qué paper nominé para el Best Paper Award de ESWC 2024?
+k7l8m9n0o1p2	¿Cuál es el deadline para aplicar a los Master thesis topics de Spring 2025?
+l8m9n0o1p2q3	¿Cuándo empieza el proyecto KnowEU que coordino?
+m9n0o1p2q3r4	¿Cuándo se incorpora la nueva postdoc Alexandra Ruiz al equipo?
+n0o1p2q3r4s5	¿Para qué fecha necesito el NDA firmado con Repsol?
+o1p2q3r4s5t6	¿Qué duración propuse para el proyecto de colaboración con BBVA?
+p2q3r4s5t6u7	¿Cuándo está programada la publicación del dataset SpainCultureKG?
+q3r4s5t6u7v8	¿En qué semestre propuse dar el curso de Semantic Technologies?
+r4s5t6u7v8w9	¿En qué fecha y hora reporté el intento de acceso no autorizado?
+s5t6u7v8w9x0	¿Cuándo tengo programada mi movilidad Erasmus a Bologna?
+t6u7v8w9x0y1	¿Para cuándo debe estar listo el Lab C-204 para la instalación de equipos?
+u7v8w9x0y1z2	¿En qué fechas es el W3C Workshop en Berlin al que voy a asistir?
+v8w9x0y1z2a3	¿Cuándo tengo que entregar el próximo reporte periódico del proyecto GraphMed?
+w9x0y1z2a3b4	¿A quién nominé como PC member para ISWC 2024?
+x0y1z2a3b4c5	¿Qué libros solicité comprar para la biblioteca del grupo?
+y1z2a3b4c5d6	¿Cuál es el deadline para aplicar a la posición de Research Software Engineer?
+z2a3b4c5d6e7	¿Para cuándo espero tener la aprobación de ética del estudio UserKG?
+75589cf6e5b1    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+331091154823    ¿Cuál es el deadline para solicitar la Reproducibility Badge para el paper?,
+cf1acb676f41    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+44949a93ffa7    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+2276cfec6bf1    ¿Cuál es la fecha límite para actualizar el inventario Q4 2024?,
+fd4a27ffe4b5    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+e4a7d1462ff5    ¿Cuál es el deadline para solicitar la Reproducibility Badge para el paper?,
+2622c79cd7c4    ¿Cuál es la fecha límite para actualizar el inventario Q4 2024?,
+d1e1ce8169b6    ¿Cuál es la fecha límite para actualizar el inventario Q4 2024?,
+3ba1086c0585    ¿Cuál es la fecha de inicio propuesta para la Marie Curie Fellowship?,
+683e180ec99a    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+5e386b72cd20    ¿Cuál es la fecha límite para actualizar el inventario Q4 2024?,
+a9b9f89a8b6b    ¿Cuál es la fecha de inicio propuesta para la Marie Curie Fellowship?,
+3ee3c8ad684a    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+638704145ab1    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+ee221b3c85af    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+c434c38a8cc7    ¿Cuál era el deadline para la nominación al Best Paper Award de ESWC 2024?,
+df7919b70c8c    ¿Cuál era el deadline para la nominación al Best Paper Award de ESWC 2024?,
+da55f25ff610    ¿En qué semestre se propone impartir el curso 'Semantic Technologies and Knowledge Graphs'?,
+f52168e4f28a    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+3bb95178814e    ¿Cuál es la fecha límite para actualizar el inventario Q4 2024?,
+9617c16c43b5    ¿En qué semestre se propone impartir el curso 'Semantic Technologies and Knowledge Graphs'?,
+943638dcff36    ¿Cuál era el deadline para la nominación al Best Paper Award de ESWC 2024?,
+3db26a3b7eab    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+1d364bbb4e37    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+c62431cacc20    ¿Cuál es la fecha de inicio propuesta para la Marie Curie Fellowship?,
+10f71e64b76f    ¿En qué semestre se propone impartir el curso 'Semantic Technologies and Knowledge Graphs'?,
+7148186b4198    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+2840eb02fbac    ¿Para cuándo se necesita la carta de invitación oficial para Dr. Wei Chen?,
+7bbfc2c52fce    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+95b4f87b61c3    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+5966fa858e66    ¿Cuál era el deadline para la nominación al Best Paper Award de ESWC 2024?,
+7fe53f262064    ¿Cuál es la fecha límite para actualizar el inventario Q4 2024?,
+07a7d4c09187    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+1d4489fe1a6d    ¿Para cuándo se necesita la carta de invitación oficial para Dr. Wei Chen?,
+90d924c7d605    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+0f1c1bb6470d    ¿Cuál es el deadline para solicitar la Reproducibility Badge para el paper?,
+347ac4ecd0fa    ¿Cuál es la fecha límite para actualizar el inventario Q4 2024?,
+6a2783684c7d    ¿Cuál era el deadline para la nominación al Best Paper Award de ESWC 2024?,
+d4648875b248    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+e299d68c839b    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+fdc070f8ee09    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+4dcddad2f037    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+fd100f926b83    ¿Para cuándo se necesita la carta de invitación oficial para Dr. Wei Chen?,
+58f49b563755    ¿Cuál es la fecha de inicio propuesta para la Marie Curie Fellowship?,
+1cfddbee91b3    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+275c59e88949    ¿Cuál es la fecha de inicio propuesta para la Marie Curie Fellowship?,
+b1ecc1cd1584    ¿Cuál es la fecha de inicio propuesta para la Marie Curie Fellowship?,
+c0361ba9650b    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+c848beb0eb33    ¿Para cuándo se necesita la carta de invitación oficial para Dr. Wei Chen?,
+04f580fbe827    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+f290e7feb132    ¿Cuál era el deadline para la nominación al Best Paper Award de ESWC 2024?,
+518bbf69d630    ¿Cuál es el deadline para solicitar la Reproducibility Badge para el paper?,
+f582a8bc05f5    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+ddeed4e5522a    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+a52be8b1b011    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+648e55385a87    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+998034b77d2d    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+c1dd6298dd99    ¿Cuál es la fecha de inicio propuesta para la Marie Curie Fellowship?,
+99b1371ebed1    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+d57922b5000f    ¿Cuál es la fecha objetivo de publicación del dataset SpainCultureKG?,
+f19fba047fd3    ¿Cuál es la fecha de inicio propuesta para la Marie Curie Fellowship?,
+15822dd09687    ¿Para cuándo se necesita la carta de invitación oficial para Dr. Wei Chen?,
+acfe4e344e82    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+331c630d084c    ¿Cuál es el deadline para solicitar la Reproducibility Badge para el paper?,
+ca870ef91d85    ¿Cuál es el deadline para solicitar la Reproducibility Badge para el paper?,
+c909de20f050    ¿Cuál es el deadline para solicitar la Reproducibility Badge para el paper?,
+822867949c90    ¿Cuándo se envió la revisión del manuscrito JDSA-2024-156?,
+e64fb9b07e80    ¿Cuál era el deadline para la nominación al Best Paper Award de ESWC 2024?,
+8a8fffe1c609    ¿Cuál es el deadline para solicitar la Reproducibility Badge para el paper?,
+4fdafe01a552    ¿Para cuándo se necesita la carta de invitación oficial para Dr. Wei Chen?,
+6961fa714da2    ¿Para cuándo se necesita la carta de invitación oficial para Dr. Wei Chen?,
+266f439aa0d0    ¿En qué semestre se propone impartir el curso 'Semantic Technologies and Knowledge Graphs'?,
+a5eee842879f    ¿Cuál es el deadline para solicitar la Reproducibility Badge para el paper?,
+f5c6e06140a1    ¿Para cuándo se necesita la carta de invitación oficial para Dr. Wei Chen?,
+c0114fd8fd30    ¿Cuál era el deadline para la nominación al Best Paper Award de ESWC 2024?,
+e0d60f16689b    ¿Cuál es la fecha de inicio propuesta para la Marie Curie Fellowship?,
+190367f5d5d3    ¿Cuál es la fecha límite para entregar el deliverable D3.4 del proyecto DeepGraph?,
+3b008c2d713b    ¿Cuál es la fecha de inicio propuesta para la Marie Curie Fellowship?,
+ccbeb43e4553    ¿Cuál era el deadline para la nominación al Best Paper Award de ESWC 2024?

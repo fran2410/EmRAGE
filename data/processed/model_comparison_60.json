@@ -1,0 +1,58 @@
+{
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
+        "n_queries": 66,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.803030303030303,
+        "precision_at_3": 0.8787878787878788,
+        "precision_at_10": 0.9242424242424242,
+        "execution_time_sec": 45.55
+    },
+    "sentence-transformers/LaBSE": {
+        "n_queries": 66,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.7575757575757576,
+        "precision_at_3": 0.8636363636363636,
+        "precision_at_10": 0.9090909090909091,
+        "execution_time_sec": 237.03
+    },
+    "intfloat/multilingual-e5-base": {
+        "n_queries": 66,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.8787878787878788,
+        "precision_at_3": 0.9545454545454546,
+        "precision_at_10": 1,
+        "execution_time_sec": 371.52
+    },
+    "sentence-transformers/all-MiniLM-L6-v2": {
+        "n_queries": 66,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.6666666666666666,
+        "precision_at_3": 0.7727272727272727,
+        "precision_at_10": 0.8333333333333334,
+        "execution_time_sec": 41.55
+    },
+    "sentence-transformers/paraphrase-MiniLM-L6-v2": {
+        "n_queries": 66,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.6818181818181818,
+        "precision_at_3": 0.7424242424242424,
+        "precision_at_10": 0.7727272727272727,
+        "execution_time_sec": 32.44
+    },
+    "sentence-transformers/all-MiniLM-L12-v2": {
+        "n_queries": 66,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.5909090909090909,
+        "precision_at_3": 0.7272727272727273,
+        "precision_at_10": 0.7878787878787878,
+        "execution_time_sec": 61.71
+    },
+    "sentence-transformers/all-mpnet-base-v2": {
+        "n_queries": 66,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.5909090909090909,
+        "precision_at_3": 0.696969696969697,
+        "precision_at_10": 0.803030303030303,
+        "execution_time_sec": 379.3
+    }
+}

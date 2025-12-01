@@ -1,0 +1,58 @@
+{
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
+        "n_queries": 146,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.3698630136986301,
+        "precision_at_3": 0.5273972602739726,
+        "precision_at_10": 0.9041095890410958,
+        "execution_time_sec": 48.95
+    },
+    "sentence-transformers/LaBSE": {
+        "n_queries": 146,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.3082191780821918,
+        "precision_at_3": 0.4726027397260274,
+        "precision_at_10": 0.8904109589041096,
+        "execution_time_sec": 248.77
+    },
+    "intfloat/multilingual-e5-base": {
+        "n_queries": 146,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.3835616438356164,
+        "precision_at_3": 0.5342465753424658,
+        "precision_at_10": 0.9315068493150684,
+        "execution_time_sec": 380.09
+    },
+    "sentence-transformers/all-MiniLM-L6-v2": {
+        "n_queries": 146,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.3082191780821918,
+        "precision_at_3": 0.4452054794520548,
+        "precision_at_10": 0.8356164383561644,
+        "execution_time_sec": 44.2
+    },
+    "sentence-transformers/paraphrase-MiniLM-L6-v2": {
+        "n_queries": 146,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.2534246575342466,
+        "precision_at_3": 0.363013698630137,
+        "precision_at_10": 0.6986301369863014,
+        "execution_time_sec": 31.23
+    },
+    "sentence-transformers/all-MiniLM-L12-v2": {
+        "n_queries": 146,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.273972602739726,
+        "precision_at_3": 0.4246575342465753,
+        "precision_at_10": 0.7671232876712328,
+        "execution_time_sec": 50.5
+    },
+    "sentence-transformers/all-mpnet-base-v2": {
+        "n_queries": 146,
+        "n_missing_in_db": 0,
+        "precision_at_1": 0.2534246575342466,
+        "precision_at_3": 0.3904109589041096,
+        "precision_at_10": 0.684931506849315,
+        "execution_time_sec": 388.21
+    }
+}

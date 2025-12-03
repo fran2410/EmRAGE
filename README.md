@@ -23,8 +23,8 @@ Para instalar Conda en tu sistema visita por favor la documentación oficial de 
 
 #### Crear y activar el entorno Conda
 ```bash
-conda create -n emailRagSystem   python=3.13 
-conda activate emailRagSystem   
+conda create -n EmRAGE   python=3.13 
+conda activate EmRAGE   
 ```
 
 ## 2. Poetry

@@ -694,15 +694,200 @@ Please answer the question based on the above emails. Remember to cite sources."
         #     f.write(f"{prompt}\n")
         return self.ollama.generate(prompt)
 
+class LLMEvaluator:
+
+    def __init__(self, evaluator_model: str = "llama3.2:3b"):
+        self.ollama = OllamaHandler(model_name=evaluator_model)
+        self.ollama.temperature = 0.1  
+        self.ollama.max_tokens = 2000
+    
+    def _create_evaluation_prompt(
+        self,
+        query: str,
+        context: str,
+        response: str,
+        sources: List[Dict],
+        expected_email_id: Optional[str] = None
+    ) -> str:
+        """Crea el prompt para evaluar la respuesta"""
+        
+        prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+Eres un evaluador experto de sistemas RAG (Retrieval-Augmented Generation) para correos electrónicos.
+
+Tu tarea es evaluar la calidad de una respuesta generada por un asistente de IA que responde preguntas sobre emails.
+
+Debes evaluar los siguientes aspectos en una escala del 1 al 10:
+
+1. **PRECISIÓN** (1-10): ¿La respuesta es factualmente correcta según el contexto proporcionado?
+2. **RELEVANCIA** (1-10): ¿La respuesta responde directamente a la pregunta del usuario?
+3. **USO_DE_FUENTES** (1-10): ¿La respuesta cita correctamente las fuentes (emails) utilizadas?
+4. **COHERENCIA** (1-10): ¿La respuesta es clara, bien estructurada y fácil de entender?
+5. **COMPLETITUD** (1-10): ¿La respuesta es completa o le falta información relevante?
+6. **RECUPERACIÓN** (1-10): ¿Los emails recuperados son relevantes para responder la pregunta?
+
+FORMATO DE RESPUESTA OBLIGATORIO:
+PRECISIÓN: [número]
+RELEVANCIA: [número]
+USO_DE_FUENTES: [número]
+COHERENCIA: [número]
+COMPLETITUD: [número]
+RECUPERACIÓN: [número]
+COMENTARIOS: [tu análisis detallado]
+
+IMPORTANTE: Debes responder EXACTAMENTE en ese formato, con los números del 1 al 10.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+PREGUNTA DEL USUARIO:
+{query}
+
+CONTEXTO PROPORCIONADO (Emails recuperados):
+{context[:3000]}...
+
+RESPUESTA GENERADA:
+{response}
+
+FUENTES UTILIZADAS:
+{self._format_sources(sources)}
+"""
+        
+        if expected_email_id:
+            email_found = self._check_email_in_sources(expected_email_id, sources)
+            prompt += f"""
+EMAIL ESPERADO: {expected_email_id}
+¿ESTÁ EN LAS FUENTES?: {'SÍ' if email_found else 'NO'}
+"""
+        
+        prompt += """
+Por favor, evalúa la respuesta según los criterios mencionados.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+"""
+        return prompt
+    
+    def _format_sources(self, sources: List[Dict]) -> str:
+        formatted = []
+        for idx, source in enumerate(sources, 1):
+            if source.get("type") == "thread":
+                formatted.append(f"{idx}. HILO - {source.get('subject')} (Relevancia: {source.get('relevance_score')})")
+            else:
+                formatted.append(f"{idx}. EMAIL [{source.get('email_id')}] - {source.get('subject')} (Relevancia: {source.get('relevance_score')})")
+        return "\n".join(formatted)
+    
+    def _check_email_in_sources(self, email_id: str, sources: List[Dict]) -> bool:
+        for source in sources:
+            if source.get("type") == "thread":
+                for email in source.get("emails", []):
+                    if email.get("email_id") == email_id:
+                        return True
+            elif source.get("email_id") == email_id:
+                return True
+        return False
+    
+    def _parse_evaluation(self, raw_response: str) -> Dict[str, Any]:
+        scores = {
+            "precisión": 0,
+            "relevancia": 0,
+            "uso_de_fuentes": 0,
+            "coherencia": 0,
+            "completitud": 0,
+            "recuperación": 0,
+            "comentarios": ""
+        }
+        
+        lines = raw_response.strip().split('\n')
+        comentarios_started = False
+        comentarios_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            if line.startswith("COMENTARIOS:"):
+                comentarios_started = True
+                comentarios_lines.append(line.replace("COMENTARIOS:", "").strip())
+            elif comentarios_started:
+                comentarios_lines.append(line)
+            else:
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    key = key.strip().lower().replace("_", "_")
+                    try:
+                        score = int(value.strip().split()[0])
+                        if "PRECISIÓN" in line or "PRECISION" in line:
+                            scores["precisión"] = score
+                        elif "RELEVANCIA" in line:
+                            scores["relevancia"] = score
+                        elif "USO" in line or "FUENTES" in line:
+                            scores["uso_de_fuentes"] = score
+                        elif "COHERENCIA" in line:
+                            scores["coherencia"] = score
+                        elif "COMPLETITUD" in line:
+                            scores["completitud"] = score
+                        elif "RECUPERACIÓN" in line or "RECUPERACION" in line:
+                            scores["recuperación"] = score
+                    except (ValueError, IndexError):
+                        continue
+        
+        scores["comentarios"] = " ".join(comentarios_lines).strip()
+        return scores
+    
+    def evaluate(
+        self,
+        query: str,
+        context: str,
+        response: str,
+        sources: List[Dict],
+        expected_email_id: Optional[str] = None,
+        response_time: float = 0.0
+    ) -> Dict[str, Any]:
+
+        print(f"\n[EVALUATOR] Evaluando respuesta...")
+        
+        prompt = self._create_evaluation_prompt(
+            query, context, response, sources, expected_email_id
+        )
+        
+        raw_evaluation = ""
+        for chunk in self.ollama.generate(prompt):
+            raw_evaluation += chunk
+        
+        scores = self._parse_evaluation(raw_evaluation)
+        
+        score_values = [
+            scores["precisión"],
+            scores["relevancia"],
+            scores["uso_de_fuentes"],
+            scores["coherencia"],
+            scores["completitud"],
+            scores["recuperación"]
+        ]
+        avg_score = sum(score_values) / len(score_values) if score_values else 0
+        
+        email_found = False
+        if expected_email_id:
+            email_found = self._check_email_in_sources(expected_email_id, sources)
+        
+        result = {
+            "scores": scores,
+            "average_score": round(avg_score, 2),
+            "response_time": response_time,
+            "email_found": email_found if expected_email_id else None,
+            "expected_email_id": expected_email_id,
+            "raw_evaluation": raw_evaluation
+        }
+        
+        print(f"[EVALUATOR] ✓ Promedio: {result['average_score']}/10")
+        
+        return result
 
 if __name__ == "__main__":
 
-    db_path = "../data/emails_vectordb"
-    contact_db_path = "../data/emails_vectordb_contacts"
+    DB_PATH = "../data/emails_vectordb"
+    CONTACT_DB_PATH = "../data/emails_vectordb_contacts"
 
     # ---ENRON---
-    # db_path = "../data/test_vectordb"
-    # contact_db_path = "../data/test_vectordb_contacts"
+    # DB_PATH = "../data/test_vectordb"
+    # CONTACT_DB_PATH = "../data/test_vectordb_contacts"
 
     try:
         from embeddings_system import (
@@ -712,8 +897,8 @@ if __name__ == "__main__":
         )
 
         embedder = MultilingualEmbedder()
-        contact_db = ContactVectorDB(db_path=contact_db_path, embedder=embedder)
-        db = EmailVectorDB(db_path=db_path, embedder=embedder)
+        contact_db = ContactVectorDB(db_path=CONTACT_DB_PATH, embedder=embedder)
+        db = EmailVectorDB(db_path=DB_PATH, embedder=embedder)
 
         print(" EmailVectorDB y ContactDB cargados correctamente.\n")
     except Exception as e:
@@ -784,7 +969,7 @@ if __name__ == "__main__":
 
                         if last_element.get("filtered_by_contact"):
                             print(
-                                f"👥 Filtrado por contacto: {last_element['total_filtered_emails']} emails"
+                                f" Filtrado por contacto: {last_element['total_filtered_emails']} emails"
                             )
 
                         if last_element.get("sources"):

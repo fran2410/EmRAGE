@@ -1,15 +1,20 @@
-# TFG
+
+<img src="iconos/icono_recortado.png" alt="Descripción" width="100"/>
+
+
+
 [![License](http://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 [![Python](https://img.shields.io/badge/python-3.13-blue)](https://www.python.org/) 
 
+# EmRAGE
 Desarrollo de un sistema de búsqueda para correo electrónico basado en LLMs
 
 # Instalar desde Github
 
 ##  Clonar el repositorio:
    ```bash
-   git clone https://github.com/fran2410/TFG.git
-   cd TFG
+   git clone https://github.com/fran2410/EmRAGE.git
+   cd EmRAGE
    ```
 ## 1. Conda
 

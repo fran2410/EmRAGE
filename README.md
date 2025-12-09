@@ -7,21 +7,21 @@
 [![Python](https://img.shields.io/badge/python-3.13-blue)](https://www.python.org/) 
 
 # EmRAGE
-Desarrollo de un sistema de búsqueda para correo electrónico basado en LLMs
+Development of an email search system based on LLMs.
 
-# Instalar desde Github
+# Install from Github
 
-##  Clonar el repositorio:
+## Clone the repository
    ```bash
    git clone https://github.com/fran2410/EmRAGE.git
    cd EmRAGE
    ```
 ## 1. Conda
 
-Para instalar Conda en tu sistema visita por favor la documentación oficial de Conda [here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html).
+For installing Conda on your system, please visit the official Conda documentation [here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html).
 
 
-#### Crear y activar el entorno Conda
+#### Create and activate the Conda environment
 ```bash
 conda create -n EmRAGE   python=3.13 
 conda activate EmRAGE   
@@ -29,22 +29,22 @@ conda activate EmRAGE
 
 ## 2. Poetry
 
-Para instalar Poetry en tu sistema visita por favor la documentación oficial de Poetry [here](https://python-poetry.org/docs/#installation).
+For installing Poetry on your system, please visit the official Poetry documentation [here](https://python-poetry.org/docs/#installation).
 
-#### Instalar las dependencias del proyecto
-Ejecuta el siguiente comando en la raíz de el repositorio para instalar las dependencias necesarias.
+#### Install project dependencies
+Run the following command in the root of the repository to install dependencies:
 ```bash
 poetry install
 ```
 
-## 3. Modelos
-Para instalar los modelos a utilizar se dispone de un script llamado `install.sh` pero se puede hacer de forma manual ejecutando los siguientes comandos:
+## 3. Models
+To install the models you can use the script `install.sh` or run the commands manually:
 ```
-# --- 1. Ollama y Modelo ---
+# --- 1. Ollama y llama3.2 ---
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama3.2:1b
 
-# --- 2. Modelos de spaCy ---
+# --- 2. spaCy models ---
 poetry run python -m spacy download en_core_web_md
 poetry run python -m spacy download es_core_news_lg
 poetry run python -m spacy download fr_core_news_sm
@@ -53,84 +53,101 @@ poetry run python -m spacy download it_core_news_sm
 poetry run python -m spacy download pt_core_news_sm
 poetry run python -m spacy download xx_ent_wiki_sm
 ```
+# Installing through Docker
 
-# Uso
-## 1. Procesamiento de Correos Electrónicos
-El primer paso es procesar los archivos .eml y convertirlos a un formato estructurado:
+We provide a Docker image with the scripts already installed. To run through Docker, you may build the Dockerfile provided in the repository by running:
+
+```bash
+docker build -t EmRAGE .
+```
+
+Then, to run your image just type:
+
+```bash
+docker run --rm -it  EmRAGE
+```
+
+And you will be ready to use the scripts (see section below). If you want to have access to the results we recommend [mounting a volume](https://docs.docker.com/storage/volumes/). For example, the following command will mount the current directory as the `out` folder in the Docker image:
+
+```bash
+docker run -it --rm -v $PWD/out:/EmRAGE/out EmRAGE 
+```
+If you move any files produced by the scripts or set the output folder to `/out`, you will be able to see them in your current directory in the `/out` folder.
+
+# Usage
+## 1. Email Processing
+Processes .eml files and converts them into structured format.
 
 ```bash
 python src/email_loader.py
 ```
-Por defecto, busca correos en la carpeta `data/emails` y guarda el resultado en `data/processed/emails_processed.json`.
+By default it reads from `data/emails` and writes to `data/processed/emails_processed.json`.
 
-## 2. Indexación para Búsqueda Semántica
-Una vez procesados los correos, se indexan para búsquedas rápidas:
-
+## 2. Semantic Indexing
+Once the emails are processed, they are indexed for quick searches.
 ```bash
 python src/embeddings_system.py
 ```
 
-## 3. Sistema de Búsqueda y Respuestas
-Para usar el sistema interactivo de búsqueda:
-
+## 3. Search and Response System
+To use the interactive search system:
 ```bash
 python src/rag_engine.py
 ```
 
-# Metadatos
+# Metadata
 
-El sistema utiliza un esquema de metadatos uniforme para representar y almacenar la información de cada correo electrónico antes de generar embeddings e indexarlos en la base de datos vectorial.
+The system uses a uniform metadata schema to represent and store the information of each email before generating embeddings and indexing them in the vector database.
 
-## Estructura (`Email`)
+## Structure (`Email`)
 
-Cada correo se representa mediante una instancia de la clase `Email` (definida en `email_loader.py`), cuyos campos principales son:
+Each email is represented by an instance of the `Email` class (defined in `email_loader.py`), whose main fields are:"
 
-| Campo | Tipo | Descripción |
+| Field | Type | Description |
 |-------|------|--------------|
-| **id** | `str` | Identificador único de 12 caracteres (hash MD5 truncado). |
-| **message_id** | `str` | ID original del mensaje (`Message-ID` del encabezado). | Extraído del campo `Message-ID`. |
-| **date** | `str` | Fecha normalizada en formato ISO UTC. | Parseada con `parsedate_to_datetime()` y convertida a UTC. |
-| **from_address** | `str` | Dirección de correo del remitente. | Campo `From`, normalizado. |
-| **to_addresses** | `list[str]` | Lista de destinatarios principales. | 
-| **cc_addresses**, **bcc_addresses** | `list[str]` | Copias visibles/ocultas. |
-| **subject** | `str` | Asunto del correo. |
-| **body** | `str` | Cuerpo del mensaje en texto plano. |
-| **thread_id** | `str` | Identificador del hilo. | 
-| **in_reply_to**, **references** | `str` | 
-| **x_filename** | `str` | Nombre del archivo `.eml` original. | 
+| **id** | `str` | Unique 12 character ID from truncated MD5 hash. |
+| **message_id** | `str` | Original Message-ID (`Message-ID` del encabezado). |
+| **date** | `str` | ISO UTC normalized date. |
+| **from_address** | `str` | Sender address. |
+| **to_addresses** | `list[str]` | Primary recipients. | 
+| **cc_addresses**, **bcc_addresses** | `list[str]` | CC and BCC. |
+| **subject** | `str` | Email subject. |
+| **body** | `str` | Plain text body. |
+| **thread_id** | `str` | Thread identifier. | 
+| **in_reply_to**, **references** | `str` | Reply metadata | 
+| **x_filename** | `str` | Original `.eml` filename. | 
 ---
 
-## Metadatos de indexación (para embeddings)
+## Indexing Metadata
 
-Durante la indexación (`embeddings_system.py`), cada correo se divide en *chunks* (fragmentos de texto) y se enriquece con metadatos adicionales para búsqueda semántica.
+During indexing (`embeddings_system.py`), each email is split into *chunks* (text fragments) and enriched with additional metadata for semantic search.
 
-| Campo | Tipo | Descripción |
+| Field | Type | Description |
 |-------|------|--------------|
-| **email_id** | `str` | Referencia al `Email.id` original. |
-| **message_id**, **from**, **to**, **cc**, **bcc**, **date**, **subject**, **thread_id**, **in_reply_to**, **references**, **x_filename** | Copiados desde el objeto `Email`. |
-| **chunk_type** | `"subject_body"` | Indica el tipo de fragmento. |
-| **chunk_index** | `int` | Índice del fragmento dentro del correo. |
-| **chunk_start**, **chunk_end** | `int` | Posiciones inicial y final del fragmento. |
-| **total_chunks** | `int` | Total de fragmentos del correo. |
+| **email_id** | `str` | Reference to `Email.id`. |
+| **message_id**, **from**, **to**, **cc**, **bcc**, **date**, **subject**, **thread_id**, **in_reply_to**, **references**, **x_filename** | Copied metadata from `Email`. |
+| **chunk_type** | `"subject_body"` | Fragment type. |
+| **chunk_index** | `int` | Fragment index. |
+| **chunk_start**, **chunk_end** | `int` | Text positions. |
+| **total_chunks** | `int` | Total fragments. |
 
-Los textos se normalizan mediante:
-- Eliminación de espacios múltiples y líneas vacías.  
-- Sustitución de URLs por `[URL]` y correos por `[EMAIL]`.  
-- Limpieza de separadores o símbolos repetidos.  
-
+Texts are normalized by:
+- Eliminating multiple spaces and empty lines.
+- Replacing URLs with `[URL]` and emails with `[EMAIL]`.
+- Cleaning repeated separators or symbols.
 ---
 
-## Metadatos de contactos
+## Contact Metadata
 
-Además, el sistema genera una base de datos separada de contactos (`ContactVectorDB`):
+Additionally, the system generates a separate contact database (`ContactVectorDB`):
 
-| Campo | Tipo | Descripción |
+| Field | Type | Description |
 |-------|------|--------------|
-| **email_address** | `str` | Dirección de correo normalizada. |
-| **display_name** | `str` | Nombre visible o alias. |
-| **sent_ids** | `list[str]` | IDs de correos enviados por este contacto. |
-| **received_ids** | `list[str]` | IDs de correos recibidos de este contacto. |
-| **total_emails** | `int` | Total de mensajes relacionados. |
+| **email_address** | `str` | Normalized address. |
+| **display_name** | `str` | Visible name. |
+| **sent_ids** | `list[str]` | Emails sent. |
+| **received_ids** | `list[str]` | Emails received. |
+| **total_emails** | `int` | Total related messages. |
 
 
 ## License

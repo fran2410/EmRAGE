@@ -882,12 +882,12 @@ Por favor, evalúa la respuesta según los criterios mencionados.<|eot_id|><|sta
 
 if __name__ == "__main__":
 
-    DB_PATH = "../data/emails_vectordb"
-    CONTACT_DB_PATH = "../data/emails_vectordb_contacts"
+    # DB_PATH = "../data/emails_vectordb"
+    # CONTACT_DB_PATH = "../data/emails_vectordb_contacts"
 
     # ---ENRON---
-    # DB_PATH = "../data/test_vectordb"
-    # CONTACT_DB_PATH = "../data/test_vectordb_contacts"
+    DB_PATH = "../data/test_vectordb"
+    CONTACT_DB_PATH = "../data/test_vectordb_contacts"
 
     try:
         from embeddings_system import (
@@ -951,7 +951,7 @@ if __name__ == "__main__":
                             last_element = item
 
                     print("\n")
-
+                    
                     if last_element:
                         print("─" * 70)
                         print(f"    Tiempo: {last_element['time']:.2f}s")

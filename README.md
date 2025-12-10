@@ -58,13 +58,13 @@ poetry run python -m spacy download xx_ent_wiki_sm
 We provide a Docker image with the scripts already installed. To run through Docker, you may build the Dockerfile provided in the repository by running:
 
 ```bash
-docker build -t EmRAGE .
+docker build -t emrage .
 ```
 
 Then, to run your image just type:
 
 ```bash
-docker run --rm -it  EmRAGE
+docker run --rm -it --add-host=host.docker.internal:host-gateway emrage
 ```
 
 And you will be ready to use the scripts (see section below). If you want to have access to the results we recommend [mounting a volume](https://docs.docker.com/storage/volumes/). For example, the following command will mount the current directory as the `out` folder in the Docker image:

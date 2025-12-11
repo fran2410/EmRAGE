@@ -355,9 +355,10 @@ if __name__ == "__main__":
 
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--emails", type=str, default="../Emails")
+    parser.add_argument("--emails", type=str, default="data/emails")
+    parser.add_argument("--output", type=str, default="data/processed/emails_processed.json")
     args = parser.parse_args()
     
     emails, loader = quick_test(
-        args.emails, output_json="data/processed/emails_processed.json"
+        args.emails, args.output
     )

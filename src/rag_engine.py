@@ -1,3 +1,4 @@
+import argparse
 import json
 import requests
 from typing import List, Dict, Optional, Any, Tuple, Set
@@ -881,14 +882,19 @@ Por favor, evalúa la respuesta según los criterios mencionados.<|eot_id|><|sta
         return result
 
 if __name__ == "__main__":
-
+    # ---CUSTOM---
     # DB_PATH = "data/emails_vectordb"
     # CONTACT_DB_PATH = "data/emails_vectordb_contacts"
 
     # ---ENRON---
     DB_PATH = "data/test_vectordb"
     CONTACT_DB_PATH = "data/test_vectordb_contacts"
-
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--db-path", type=str, default=DB_PATH)
+    parser.add_argument("--contact-db-path", type=str, default=CONTACT_DB_PATH)
+    args = parser.parse_args()
+    
     try:
         from embeddings_system import (
             EmailVectorDB,

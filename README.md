@@ -82,19 +82,42 @@ Processes .eml files and converts them into structured format.
 python src/email_loader.py
 ```
 By default it reads from `data/emails` and writes to `data/processed/emails_processed.json`.
+#### Command Line Options
+
+```
+--emails                 # Emails folder
+--output                 # Output JSON path
+```
 
 ## 2. Semantic Indexing
 Once the emails are processed, they are indexed for quick searches.
 ```bash
 python src/embeddings_system.py
 ```
+#### Command Line Options
+```
+# Model testing options
+--test-models             # Test multiple embedding models
+--test-file               # Path to test file (default: data/evaluate/test_preguntas_146.txt)
+--topk                    # Top K results to consider (default: 3)
+--n-results               # Number of results per query (default: 10)
+--device                  # CPU or CUDA device (default: cpu)
 
+# Database paths
+--db-path                 # Custom database path
+--json-path               # Custom JSON data path
+```
 ## 3. Search and Response System
 To use the interactive search system:
 ```bash
 python src/rag_engine.py
 ```
-
+#### Command Line Options
+```
+# Database paths
+--db-path                 # Custom database path
+--contact-db-path         # Custom contacts database path
+```
 # Metadata
 
 The system uses a uniform metadata schema to represent and store the information of each email before generating embeddings and indexing them in the vector database.

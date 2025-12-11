@@ -75,6 +75,7 @@ docker run -it --rm --add-host=host.docker.internal:host-gateway -v $PWD/out:/Em
 If you move any files produced by the scripts or set the output folder to `/out`, you will be able to see them in your current directory in the `/out` folder.
 
 # Usage
+
 ## 1. Email Processing
 Processes .eml files and converts them into structured format.
 
@@ -94,6 +95,8 @@ Once the emails are processed, they are indexed for quick searches.
 ```bash
 python src/embeddings_system.py
 ```
+By default it reads from `data/processed/enron_sample_10000+146+noise.json` and creates the database in `data/test_vectordb` and `data/test_vectordb_contacts`.
+    
 #### Command Line Options
 ```
 # Model testing options
@@ -112,6 +115,7 @@ To use the interactive search system:
 ```bash
 python src/rag_engine.py
 ```
+By default uses `data/test_vectordb` and `data/test_vectordb_contacts` if they have been created previously with `src/embeddings_system.py`.
 #### Command Line Options
 ```
 # Database paths

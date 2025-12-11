@@ -876,18 +876,18 @@ Por favor, evalúa la respuesta según los criterios mencionados.<|eot_id|><|sta
             "raw_evaluation": raw_evaluation
         }
         
-        print(f"[EVALUATOR] ✓ Promedio: {result['average_score']}/10")
+        print(f"[EVALUATOR]  Promedio: {result['average_score']}/10")
         
         return result
 
 if __name__ == "__main__":
 
-    # DB_PATH = "../data/emails_vectordb"
-    # CONTACT_DB_PATH = "../data/emails_vectordb_contacts"
+    # DB_PATH = "data/emails_vectordb"
+    # CONTACT_DB_PATH = "data/emails_vectordb_contacts"
 
     # ---ENRON---
-    DB_PATH = "../data/test_vectordb"
-    CONTACT_DB_PATH = "../data/test_vectordb_contacts"
+    DB_PATH = "data/test_vectordb"
+    CONTACT_DB_PATH = "data/test_vectordb_contacts"
 
     try:
         from embeddings_system import (

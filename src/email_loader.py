@@ -1,3 +1,4 @@
+import argparse
 import email
 from email import policy
 from email.parser import BytesParser
@@ -345,15 +346,18 @@ def quick_test(emails_folder: str, output_json: str = None):
         if output_json:
             loader.save_processed_emails(output_json)
         else:
-            loader.save_processed_emails("../data/processed/emails_processed.json")
+            loader.save_processed_emails("data/processed/emails_processed.json")
 
     return emails, loader
 
 
 if __name__ == "__main__":
 
-    emails_folder = "../../Emails"
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--emails", type=str, default="../Emails")
+    args = parser.parse_args()
+    
     emails, loader = quick_test(
-        emails_folder, output_json="../data/processed/emails_processed.json"
+        args.emails, output_json="data/processed/emails_processed.json"
     )

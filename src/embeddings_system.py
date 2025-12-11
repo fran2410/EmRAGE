@@ -810,7 +810,7 @@ def test_multiple_models(
         print(f"{'='*80}\n")
 
         db_path = (
-            f"../data/test_vectordb_{model_name.replace('/', '_').replace('-', '_')}"
+            f"data/test_vectordb_{model_name.replace('/', '_').replace('-', '_')}"
         )
 
         db = None
@@ -911,61 +911,7 @@ def test_multiple_models(
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False, indent=4)
     print(f"Resultados guardados en: {output_file}")
-        # Después de guardar el archivo principal con precisión
-    # Añadir esta sección para calcular y guardar MRR como métrica adicional
-    
-    print(f"\n{'='*80}")
-    print("CALCULANDO MÉTRICA MRR (MEAN RECIPROCAL RANK)")
-    print(f"{'='*80}")
-    
-    # Crear diccionario separado para resultados de MRR
-    all_mrr_results = {}
-    
-    for model_name, metrics in all_results.items():
-        if "error" not in metrics:
-            # Recalcular o extraer MRR si ya está calculado
-            # Nota: el run_retrieval_tester ya calcula MRR cuando use_mrr=True
-            # Pero necesitamos asegurarnos de tenerlo separado
-            all_mrr_results[model_name] = {
-                "mrr": metrics.get("mrr", 0.0),
-                "n_queries": metrics.get("n_queries", 0),
-                "n_missing_in_db": metrics.get("n_missing_in_db", 0),
-                "execution_time_sec": metrics.get("execution_time_sec", 0.0),
-                "model_name": model_name
-            }
-        else:
-            all_mrr_results[model_name] = {
-                "error": metrics["error"],
-                "execution_time_sec": metrics.get("execution_time_sec", 0.0)
-            }
-    
-    # Guardar resultados de MRR en archivo separado
-    mrr_output_file = output_file.replace(".json", "_mrr.json")
-    with open(mrr_output_file, "w", encoding="utf-8") as f:
-        json.dump(all_mrr_results, f, ensure_ascii=False, indent=4)
-    print(f"\nResultados MRR guardados en: {mrr_output_file}")
-    
-    # Mostrar resumen comparativo de MRR
-    print(f"\n{'='*80}")
-    print("RESUMEN COMPARATIVO MRR")
-    print(f"{'='*80}")
-    print(f"{'Modelo':<50} {'MRR':<8} {'Tiempo (s)':<10}")
-    print(f"{'-'*80}")
-    
-    valid_mrr_results = {k: v for k, v in all_mrr_results.items() if "error" not in v}
-    
-    for model_name, metrics in all_mrr_results.items():
-        if "error" not in metrics:
-            print(f"{model_name:<50} {metrics['mrr']:<8.3f} {metrics['execution_time_sec']:<10.2f}")
-        else:
-            print(f"{model_name:<50} ERROR")
-    
-    if valid_mrr_results:
-        best_model_mrr = max(valid_mrr_results.items(), key=lambda x: x[1].get("mrr", 0))
-        print(f"\n{'='*80}")
-        print(f"Mejor modelo por MRR: {best_model_mrr[0]} (MRR: {best_model_mrr[1].get('mrr', 0):.3f})")
-        print(f"{'='*80}")
-    
+
     return all_results
 
 
@@ -1024,17 +970,18 @@ def test_embeddings_and_db(json_path: str, emails_db_path: str, contacts_db_path
 
 
 if __name__ == "__main__":
-    # JSON_PATH = "../data/processed/emails_processed.json"
-    # EMAILS_DB_PATH = "../data/emails_vectordb"
-    # CONTACTS_DB_PATH = "../data/emails_vectordb_contacts"
+    #---LOCAL TESTING---
+    # JSON_PATH = "data/processed/emails_processed.json"
+    # EMAILS_DB_PATH = "data/emails_vectordb"
+    # CONTACTS_DB_PATH = "data/emails_vectordb_contacts"
 
     # # #---ENRON---
-    JSON_PATH = "../data/processed/enron_sample_10000+146+noise.json"
-    EMAILS_DB_PATH = "../data/test_vectordb"
-    CONTACTS_DB_PATH = "../data/test_vectordb_contacts"
+    JSON_PATH = "data/processed/enron_sample_10000+146+noise.json"
+    EMAILS_DB_PATH = "data/test_vectordb"
+    CONTACTS_DB_PATH = "data/test_vectordb_contacts"
 
-    TEST_PATH = "test_preguntas_146.txt"
-    DATA_JSON_PATH = "../data/processed/enron_sample_1000+146+noise.json"
+    TEST_PATH = "data/evaluate/test_preguntas_146.txt"
+    DATA_JSON_PATH = "data/processed/enron_sample_1000+146+noise.json"
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-tester", action="store_true")
@@ -1043,7 +990,7 @@ if __name__ == "__main__":
         action="store_true",
         help="Probar múltiples modelos de embeddings",
     )
-    parser.add_argument("--test-file", type=str, default="test_preguntas_146.txt")
+    parser.add_argument("--test-file", type=str, default="data/evaluate/test_preguntas_146.txt")
     parser.add_argument("--json-path", type=str, default=JSON_PATH)
     parser.add_argument("--topk", type=int, default=3)
     parser.add_argument("--n-results", type=int, default=10)
@@ -1061,10 +1008,10 @@ if __name__ == "__main__":
             n_results=args.n_results,
             device=args.device,
             use_mrr=args.use_mrr,
-            output_file=DATA_JSON_PATH.replace("enron_sample", "model_comparison"),
+            output_file=DATA_JSON_PATH.replace("enron_sample", "data/evaluate/model_comparison"),
         )
     elif args.run_tester:
-        db = EmailVectorDB(db_path="../data/test_vectordb")
+        db = EmailVectorDB(db_path="data/test_vectordb")
         summary = run_retrieval_tester(
             db, args.test_file, topk=args.topk, n_results=args.n_results, use_mrr=args.use_mrr
         )

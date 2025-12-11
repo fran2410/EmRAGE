@@ -93,8 +93,8 @@ EVALUACIÓN (Modelo: llama3.2:3b)
 def run_evaluation(
     questions_file: str,
     output_file: str = None,
-    db_path: str = "../data/emails_vectordb",
-    contact_db_path: str = "../data/emails_vectordb_contacts",
+    db_path: str = "data/emails_vectordb",
+    contact_db_path: str = "data/emails_vectordb_contacts",
     rag_model: str = "llama3.2:1b",
     evaluator_model: str = "llama3.2:3b",
     num_questions: int = 146
@@ -102,7 +102,7 @@ def run_evaluation(
 
     if output_file is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = f"evaluation_report_{timestamp}.txt"
+        output_file = f"/data/evaluate/evaluation_report_{timestamp}.txt"
     
     print("\n" + "="*100)
     print("SISTEMA DE EVALUACIÓN RAG")
@@ -252,11 +252,11 @@ RESUMEN GENERAL
 
 
 if __name__ == "__main__":
-    QUESTIONS_FILE = "test_preguntas_146.txt"  
+    QUESTIONS_FILE = "data/evaluate/test_preguntas_146.txt"  
     OUTPUT_FILE = None  
 
-    DB_PATH = "../data/test_vectordb"
-    CONTACT_DB_PATH = "../data/test_vectordb_contacts"
+    DB_PATH = "data/test_vectordb"
+    CONTACT_DB_PATH = "data/test_vectordb_contacts"
     
     RAG_MODEL = "llama3.2:1b"
     EVALUATOR_MODEL = "llama3.2:3b"

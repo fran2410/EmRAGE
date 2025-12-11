@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -198,8 +199,8 @@ class EnronDataLoader:
         return sample[:n]
 
 
-def quick_test(csv_path: str):
-    loader = EnronDataLoader(csv_path, sample_size=10000)
+def quick_test(csv_path: str, n: int):
+    loader = EnronDataLoader(csv_path, sample_size=n)
     emails = loader.load_emails()
     
     if emails:
@@ -208,11 +209,15 @@ def quick_test(csv_path: str):
         print(f"  - Emails con body: {sum(1 for e in emails if e.body)}")
         print(f"  - Remitentes únicos: {len(set(e.from_address for e in emails))}")
         
-        loader.save_processed_emails("../data/processed/enron_sample_10000+60.json")
+        loader.save_processed_emails(f"data/processed/enron_sample_{n}.json")
     
     return emails
 
 
 if __name__ == "__main__":
-    csv_path = "../data/raw/emails.csv"
-    emails = quick_test(csv_path)
+    csv_path = "data/raw/emails.csv"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--csv-path", type=str, default="../Emails")
+    parser.add_argument("--num", type=int, default=1000)
+    args = parser.parse_args()
+    emails = quick_test(args.csv_path, args.num)

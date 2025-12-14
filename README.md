@@ -64,13 +64,13 @@ docker build -t emrage .
 Then, to run your image just type:
 
 ```bash
-docker run --rm -it --add-host=host.docker.internal:host-gateway emrage
+docker run -it emrage
 ```
 
 And you will be ready to use the scripts (see section below). If you want to have access to the results we recommend [mounting a volume](https://docs.docker.com/storage/volumes/). For example, the following command will mount the current directory as the `out` folder in the Docker image:
 
 ```bash
-docker run -it --rm --add-host=host.docker.internal:host-gateway -v $PWD/out:/EmRAGE/out emrage 
+docker run -it --rm -v $PWD/out:/EmRAGE/out emrage 
 ```
 If you move any files produced by the scripts or set the output folder to `/out`, you will be able to see them in your current directory in the `/out` folder.
 

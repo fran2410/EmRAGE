@@ -1,5 +1,6 @@
 import argparse
 import json
+import click
 import requests
 from typing import List, Dict, Optional, Any, Tuple, Set
 from dataclasses import dataclass
@@ -9,7 +10,9 @@ from pathlib import Path
 from functools import lru_cache
 import spacy
 from spacy.language import Language
-
+import subprocess
+from src.embeddings_system import EmailVectorDB, ContactVectorDB,MultilingualEmbedder
+        
 
 @dataclass
 class RAGResponse:
@@ -666,6 +669,7 @@ Please answer the question based on the above emails. Remember to cite sources."
                         {
                             "email_id": email["email_id"],
                             "from": email["from"],
+                            "message_id": email["message_id"],
                             "to": email["to"],
                             "date": email["date"],
                             "relevance_score": round(email["best_distance"], 3),
@@ -678,6 +682,7 @@ Please answer the question based on the above emails. Remember to cite sources."
                 source = {
                     "type": "email",
                     "email_id": result["email_id"],
+                    "message_id": result["message_id"],
                     "subject": result["subject"],
                     "from": result["from"],
                     "to": result["to"],
@@ -881,30 +886,13 @@ Por favor, evalúa la respuesta según los criterios mencionados.<|eot_id|><|sta
         
         return result
 
-if __name__ == "__main__":
-    # ---CUSTOM---
-    # DB_PATH = "data/emails_vectordb"
-    # CONTACT_DB_PATH = "data/emails_vectordb_contacts"
-
-    # ---ENRON---
-    DB_PATH = "data/test_vectordb"
-    CONTACT_DB_PATH = "data/test_vectordb_contacts"
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--db-path", type=str, default=DB_PATH)
-    parser.add_argument("--contact-db-path", type=str, default=CONTACT_DB_PATH)
-    args = parser.parse_args()
-    
+def start_interactive_session(db_path, contact_db_path):
     try:
-        from embeddings_system import (
-            EmailVectorDB,
-            ContactVectorDB,
-            MultilingualEmbedder,
-        )
+
 
         embedder = MultilingualEmbedder()
-        contact_db = ContactVectorDB(db_path=CONTACT_DB_PATH, embedder=embedder)
-        db = EmailVectorDB(db_path=DB_PATH, embedder=embedder)
+        contact_db = ContactVectorDB(db_path=contact_db_path, embedder=embedder)
+        db = EmailVectorDB(db_path=db_path, embedder=embedder)
 
         print(" EmailVectorDB y ContactDB cargados correctamente.\n")
     except Exception as e:
@@ -940,70 +928,189 @@ if __name__ == "__main__":
     if rag is not None:
         try:
             while True:
-                q = input("\nPregunta > ").strip()
-                if not q:
-                    continue
-                if q.lower() in ("exit", "quit", "salir"):
-                    break
+                q = input("\n\033[1;34mPregunta > \033[0m").strip()
+                if not q: continue
+                if q.lower() in ("exit", "quit", "salir"): break
+                
+                last_metadata = None
+                for item in rag.query(q):
+                    if isinstance(item, str):
+                        print(item, end="", flush=True)
+                    elif isinstance(item, dict) and item.get("type") == "metadata":
+                        last_metadata = item
 
-                try:
-                    print(f"\nRespuesta:\n", end="", flush=True)
-
-                    last_element = None
-                    for item in rag.query(q):
-                        if isinstance(item, str):
-                            print(item, end="", flush=True)
-                        elif isinstance(item, dict) and item.get("type") == "metadata":
-                            last_element = item
-
-                    print("\n")
+                print("\n")
+                
+                if last_metadata and last_metadata.get("sources"):
+                    sources = last_metadata["sources"]
                     
-                    if last_element:
-                        print("─" * 70)
-                        print(f"    Tiempo: {last_element['time']:.2f}s")
-                        print(f"    Modelo LLM: {last_element['model']}")
-                        print(f"    NER: {', '.join(last_element['ner_models'])}")
-                        print(
-                            f"    Idioma detectado: {last_element['detected_language'].upper()}"
-                        )
+                    while True:
+                        print("\n" + "─" * 40)
+                        print(f"\033[1mFUENTES ENCONTRADAS ({len(sources)})\033[0m")
+                        for idx, s in enumerate(sources, 1):
+                            tipo = "HILO" if s.get("type") == "thread" else "EMAIL"
+                            sub = s.get('subject', 'Sin Asunto')
+                            print(f"  \033[1;33m{idx}\033[0m. {tipo} Asunto --> {sub[:60]}...")
+                        
+                        print("-" * 40)
+                        print("  \033[1m[#]\033[0m Abrir fuente en Thunderbird")
+                        print("  \033[1m[N]\033[0m Nueva pregunta")
+                        print("  \033[1m[Q]\033[0m Salir")
+                        print("─" * 40)
 
-                        print(
-                            f"    Resultados: {last_element['results_count']} "
-                            f"({last_element['threads_count']} hilos, "
-                            f"{last_element['total_emails_in_context']} emails totales)"
-                        )
+                        choice = input("\033[1mSelecciona una opción > \033[0m").strip().lower()
 
-                        if last_element.get("filtered_by_contact"):
-                            print(
-                                f" Filtrado por contacto: {last_element['total_filtered_emails']} emails"
-                            )
-
-                        if last_element.get("sources"):
-                            print(f"\n  Fuentes ({len(last_element['sources'])}):")
-                            for idx, s in enumerate(last_element["sources"], 1):
-                                if s.get("type") == "thread":
-                                    print(f"  {idx}. HILO: {s.get('subject')}")
-                                    print(
-                                        f"     Thread ID: {s.get('thread_id')} ({s.get('thread_size')} emails)"
-                                    )
-                                    print(
-                                        f"     Relevancia: {s.get('relevance_score')}"
+                        if choice == 'n':
+                            break 
+                        elif choice == 'q':
+                            print("Saliendo...")
+                            return 
+                        elif choice.isdigit():
+                            idx = int(choice) - 1
+                            if 0 <= idx < len(sources):
+                                selected = sources[idx]
+                                msg_id = selected.get('message_id')
+                                if not msg_id and selected.get('type') == 'thread':
+                                    msg_id = selected.get('emails')[0].get('message_id')
+                                
+                                if msg_id:
+                                    print(f"Abriendo: {selected.get('subject')}...")
+                                    subprocess.run(
+                                        ["xdg-open", f"mid:{msg_id}"],
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL
                                     )
                                 else:
-                                    print(
-                                        f"  {idx}.  [{s.get('email_id')}]  |  {s.get('subject')}"
-                                    )
-                                    print(f"     De: {s.get('from')} | {s.get('date')}")
-                                    print(
-                                        f"     Relevancia: {s.get('relevance_score')}"
-                                    )
-                        print("─" * 70)
-
-                except Exception as e:
-                    print(f"\n Error: {e}")
-                    import traceback
-
-                    traceback.print_exc()
+                                    print("No se pudo encontrar el ID del mensaje.")
+                            else:
+                                print("Número fuera de rango.")
+                        else:
+                            print("Opción no válida.")
+                else:
+                    print("No se encontraron fuentes para esta consulta.")
 
         except KeyboardInterrupt:
             print("\n\nSaliendo...")
+    pass
+
+# ---CUSTOM---
+DB_PATH = "data/emails_vectordb"
+CONTACT_DB_PATH = "data/emails_vectordb_contacts"
+
+# ---ENRON---
+# DB_PATH = "data/test_vectordb"
+# CONTACT_DB_PATH = "data/test_vectordb_contacts"
+
+@click.command()
+@click.option("--db-path", default=DB_PATH, help="Ruta al VectorDB de emails")
+@click.option("--contact-db-path", default=CONTACT_DB_PATH, help="Ruta al VectorDB de contactos")
+def main_cli(db_path, contact_db_path):
+    start_interactive_session(db_path, contact_db_path)
+
+if __name__ == "__main__":
+    main_cli()
+    
+# if __name__ == "__main__":
+#     # ---CUSTOM---
+#     # DB_PATH = "data/emails_vectordb"
+#     # CONTACT_DB_PATH = "data/emails_vectordb_contacts"
+
+#     # ---ENRON---
+#     DB_PATH = "data/test_vectordb"
+#     CONTACT_DB_PATH = "data/test_vectordb_contacts"
+    
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("--db-path", type=str, default=DB_PATH)
+#     parser.add_argument("--contact-db-path", type=str, default=CONTACT_DB_PATH)
+#     args = parser.parse_args()
+    
+#     try:
+#         from embeddings_system import (
+#             EmailVectorDB,
+#             ContactVectorDB,
+#             MultilingualEmbedder,
+#         )
+
+#         embedder = MultilingualEmbedder()
+#         contact_db = ContactVectorDB(db_path=CONTACT_DB_PATH, embedder=embedder)
+#         db = EmailVectorDB(db_path=DB_PATH, embedder=embedder)
+
+#         print(" EmailVectorDB y ContactDB cargados correctamente.\n")
+#     except Exception as e:
+#         print(f" Error inicializando DBs: {e}")
+#     except Exception as e:
+#         print(f" Error creando EmailRAGEngine: {e}")
+#         rag = None
+
+#     if rag is not None:
+#         try:
+#             while True:
+#                 q = input("\nPregunta > ").strip()
+#                 if not q:
+#                     continue
+#                 if q.lower() in ("exit", "quit", "salir"):
+#                     break
+
+#                 try:
+#                     print(f"\nRespuesta:\n", end="", flush=True)
+
+#                     last_element = None
+#                     for item in rag.query(q):
+#                         if isinstance(item, str):
+#                             print(item, end="", flush=True)
+#                         elif isinstance(item, dict) and item.get("type") == "metadata":
+#                             last_element = item
+
+#                     print("\n")
+                    
+#                     if last_element:
+#                         print("─" * 70)
+#                         print(f"    Tiempo: {last_element['time']:.2f}s")
+#                         print(f"    Modelo LLM: {last_element['model']}")
+#                         print(f"    NER: {', '.join(last_element['ner_models'])}")
+#                         print(
+#                             f"    Idioma detectado: {last_element['detected_language'].upper()}"
+#                         )
+
+#                         print(
+#                             f"    Resultados: {last_element['results_count']} "
+#                             f"({last_element['threads_count']} hilos, "
+#                             f"{last_element['total_emails_in_context']} emails totales)"
+#                         )
+
+#                         if last_element.get("filtered_by_contact"):
+#                             print(
+#                                 f" Filtrado por contacto: {last_element['total_filtered_emails']} emails"
+#                             )
+
+#                         if last_element.get("sources"):
+#                             print(f"\n  Fuentes ({len(last_element['sources'])}):")
+#                             for idx, s in enumerate(last_element["sources"], 1):
+#                                 if s.get("type") == "thread":
+#                                     print(f"  {idx}. HILO: {s.get('subject')}")
+#                                     print(
+#                                         f"     Thread ID: {s.get('thread_id')} ({s.get('thread_size')} emails)"
+#                                     )
+#                                     print(
+#                                         f"     Relevancia: {s.get('relevance_score')}"
+#                                     )
+#                                 else:
+#                                     print(
+#                                         f"  {idx}.  [{s.get('email_id')}]  |  {s.get('subject')}"
+#                                     )
+#                                     print(f"     De: {s.get('from')} | {s.get('date')}")
+#                                     print(
+#                                         f"     Relevancia: {s.get('relevance_score')}"
+#                                     )
+#                                 subprocess.run(["xdg-open", f"mid:{s.get('message_id')}"])
+
+#                         print("─" * 70)
+
+#                 except Exception as e:
+#                     print(f"\n Error: {e}")
+#                     import traceback
+
+#                     traceback.print_exc()
+
+#         except KeyboardInterrupt:
+#             print("\n\nSaliendo...")

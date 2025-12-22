@@ -1,4 +1,6 @@
 import time
+
+import click
 import chromadb
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
@@ -8,11 +10,12 @@ from typing import List, Dict, Optional, Any, Tuple
 from pathlib import Path
 import json
 from tqdm import tqdm
-from data_loader import Email
+from src.data_loader import Email
 import argparse
 import statistics
 import shutil
-
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 class MultilingualEmbedder:
     def __init__(
@@ -312,9 +315,13 @@ class EmailVectorDB:
         print("\n=== Indexando EmailDB ===")
         documents = []
         metadatas = []
+        seen_email_ids = set()  
         ids = []
 
         for email in tqdm(emails, desc="Preparando documentos"):
+            if email.id in seen_email_ids:
+                continue  
+            seen_email_ids.add(email.id)
             email_docs, email_metas, email_ids = self._prepare_email_documents(email)
             documents.extend(email_docs)
             metadatas.extend(email_metas)
@@ -367,7 +374,7 @@ class EmailVectorDB:
         subject = email.subject or ""
         body = email.body or ""
 
-        if not body and subject:
+        if not body and len(subject) < 200:
             doc_id = f"{email.id}_chunk_0"
             doc_text = f"Subject: {subject}"
             doc_text = self._normalize_text(doc_text)
@@ -451,8 +458,7 @@ class EmailVectorDB:
         return processed
 
     def _rerank_results(self, results: Dict, query: str) -> Dict:
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
+
 
         docs = results["documents"][0]
         ids = results["ids"][0]
@@ -514,6 +520,7 @@ class EmailVectorDB:
             if email_id not in email_results:
                 email_results[email_id] = {
                     "email_id": email_id,
+                    "message_id": metadata.get("message_id", ""),
                     "from": metadata.get("from", ""),
                     "to": metadata.get("to", ""),
                     "subject": metadata.get("subject", ""),
@@ -685,8 +692,7 @@ def get_email_ids_in_collection(db: EmailVectorDB) -> set:
 
 
 def run_retrieval_tester(
-    db: EmailVectorDB, test_file: str, topk: int = 3, n_results: int = 10, use_mrr: bool = False
-) -> Dict[str, Any]:
+    db: EmailVectorDB, test_file: str, topk: int = 3, n_results: int = 10) -> Dict[str, Any]:
     tests = load_tests_from_tsv(test_file)
     if not tests:
         raise ValueError(f"No tests found in {test_file}")
@@ -697,7 +703,6 @@ def run_retrieval_tester(
     p_at_1 = []
     p_at_3 = []
     p_at_10 = []
-    mrr_scores = []
     missing_in_db = 0
 
     for expected_id, question in tqdm(tests, desc="Ejecutando tests"):
@@ -707,8 +712,6 @@ def run_retrieval_tester(
             p_at_1.append(0)
             p_at_3.append(0)
             p_at_10.append(0)
-            if use_mrr:
-                mrr_scores.append(0)
             results_per_query.append(
                 {
                     "expected": expected_id,
@@ -738,9 +741,6 @@ def run_retrieval_tester(
         p10 = 1 if expected_id in predicted_ids[:10] else 0
         p_at_10.append(p10)
         
-        if use_mrr:
-            rr = 1.0 / rank if rank else 0.0
-            mrr_scores.append(rr)
 
         results_per_query.append(
             {
@@ -758,11 +758,9 @@ def run_retrieval_tester(
         "precision_at_1": statistics.mean(p_at_1) if p_at_1 else 0.0,
     }
     
-    if use_mrr:
-        metrics["mrr"] = statistics.mean(mrr_scores) if mrr_scores else 0.0
-    else:
-        metrics["precision_at_3"] = statistics.mean(p_at_3) if p_at_3 else 0.0
-        metrics["precision_at_10"] = statistics.mean(p_at_10) if p_at_10 else 0.0
+
+    metrics["precision_at_3"] = statistics.mean(p_at_3) if p_at_3 else 0.0
+    metrics["precision_at_10"] = statistics.mean(p_at_10) if p_at_10 else 0.0
 
     summary = {"metrics": metrics, "per_query": results_per_query}
 
@@ -775,9 +773,7 @@ def test_multiple_models(
     output_file: str,
     topk: int = 3,
     n_results: int = 10,
-    device: str = "cpu",
-    use_mrr: bool = False,
-    
+    device: str = "cpu",    
 ):
     import torch
     import gc
@@ -830,7 +826,7 @@ def test_multiple_models(
 
             print(f"\nEjecutando tests desde {test_file}...")
             summary = run_retrieval_tester(
-                db, test_file, topk=topk, n_results=n_results, use_mrr=use_mrr
+                db, test_file, topk=topk, n_results=n_results
             )
 
             elapsed_time = time.perf_counter() - start_time
@@ -844,10 +840,8 @@ def test_multiple_models(
             print(f"Queries: {m['n_queries']}")
             print(f"Missing expected IDs in DB: {m['n_missing_in_db']}")
             print(f"Precision@1: {m['precision_at_1']:.3f}")
-            if use_mrr:
-                print(f"MRR: {m['mrr']:.3f}")
-            else:
-                print(f"Precision@3: {m['precision_at_3']:.3f}")
+            print(f"Precision@3: {m['precision_at_3']:.3f}")
+            print(f"Precision@10: {m['precision_at_10']:.3f}")
 
         except Exception as e:
             elapsed_time = time.perf_counter() - start_time
@@ -856,10 +850,8 @@ def test_multiple_models(
                 "execution_time_sec": round(elapsed_time, 2),
                 "precision_at_1": 0.0,
             }
-            if use_mrr:
-                all_results[model_name]["mrr"] = 0.0
-            else:
-                all_results[model_name]["precision_at_3"] = 0.0
+            all_results[model_name]["precision_at_3"] = 0.0
+            all_results[model_name]["precision_at_10"] = 0.0
 
         finally:
             try:
@@ -879,14 +871,13 @@ def test_multiple_models(
     print("RESUMEN COMPARATIVO DE TODOS LOS MODELOS")
     print(f"{'='*80}\n")
 
-    metric_key = "mrr" if use_mrr else "precision_at_3"
-    print(f"{'Modelo':<50} {'P@1':<8} {metric_key.upper():<8}")
+    print(f"{'Modelo':<50} {'P@1':<8} {'P@3':<8} {'P@10':<8}")
     print(f"{'-'*80}")
 
     for model_name, metrics in all_results.items():
         if "error" not in metrics:
             print(
-                f"{model_name:<50} {metrics['precision_at_1']:<8.3f} {metrics[metric_key]:<8.3f}"
+                f"{model_name:<50} {metrics['precision_at_1']:<8.3f} {metrics['precision_at_3']:<8.3f} {metrics['precision_at_10']:<8.3f}"
             )
         else:
             print(f"{model_name:<50} ERROR")
@@ -894,17 +885,25 @@ def test_multiple_models(
     valid_results = {k: v for k, v in all_results.items() if "error" not in v}
 
     if valid_results:
-        best_model_metric = max(valid_results.items(), key=lambda x: x[1].get(metric_key, 0))
         best_model_p1 = max(
             valid_results.items(), key=lambda x: x[1].get("precision_at_1", 0)
+        )
+        best_model_p3 = max(
+            valid_results.items(), key=lambda x: x[1].get("precision_at_3", 0)
+        )
+        best_model_p10 = max(
+            valid_results.items(), key=lambda x: x[1].get("precision_at_10", 0)
         )
 
         print(f"\n{'='*80}")
         print(
-            f"Mejor modelo por {metric_key.upper()}: {best_model_metric[0]} ({metric_key.upper()}: {best_model_metric[1].get(metric_key, 0):.3f})"
+            f"Mejor modelo por P@1: {best_model_p1[0]} (P@1: {best_model_p1[1].get('precision_at_1', 0):.3f})"
         )
         print(
-            f"Mejor modelo por P@1: {best_model_p1[0]} (P@1: {best_model_p1[1].get('precision_at_1', 0):.3f})"
+            f"Mejor modelo por P@3: {best_model_p3[0]} (P@3: {best_model_p3[1].get('precision_at_3', 0):.3f})"
+        )
+        print(
+            f"Mejor modelo por P@10: {best_model_p10[0]} (P@10: {best_model_p10[1].get('precision_at_10', 0):.3f})"
         )
         print(f"{'='*80}\n")
         
@@ -935,7 +934,6 @@ def test_embeddings_and_db(json_path: str, emails_db_path: str, contacts_db_path
             f"  {c['display_name']} ({c['email_address']}) - {len(c['email_ids'])} emails - Distancia: {c['distance']:.4f}"
         )
 
-    # results = db.search("enseñame el email en el que me dan la nota del examen extraordinario de cálculo", n_results=10, group_threads=True)
     results = db.search_with_reranking(
         "enseñame el email en el que me mandan la entrada del congreso try it del 2024",
         n_results=10,
@@ -967,67 +965,80 @@ def test_embeddings_and_db(json_path: str, emails_db_path: str, contacts_db_path
     print(f"  - Contactos: {stats.get('contacts_count', 0)}")
 
     return db
+def make_embeddings_and_db_from_emails(
+    emails: List[Email],
+    emails_db_path: str = "data/vectordb",
+    contacts_db_path: str = "data/vectordb_contacts",
+):
 
+    embedder = MultilingualEmbedder()
+    contact_db = ContactVectorDB(db_path=contacts_db_path, embedder=embedder)
+    db = EmailVectorDB(db_path=emails_db_path, embedder=embedder, contact_db=contact_db)
 
-if __name__ == "__main__":
-    #---LOCAL TESTING---
-    # JSON_PATH = "data/processed/emails_processed.json"
-    # EMAILS_DB_PATH = "data/emails_vectordb"
-    # CONTACTS_DB_PATH = "data/emails_vectordb_contacts"
+    print(f"Cargando {len(emails)} emails desde objetos Email")
+    db.index_emails(emails)
 
-    # # #---ENRON---
-    JSON_PATH = "data/processed/enron_sample_10000+146+noise.json"
-    EMAILS_DB_PATH = "data/test_vectordb"
-    CONTACTS_DB_PATH = "data/test_vectordb_contacts"
+    stats = db.get_stats()
+    print(f"\n Estadísticas de la DB:")
+    print(f"  - Total chunks: {stats['total_chunks']}")
+    print(f"  - Contactos: {stats.get('contacts_count', 0)}")
 
-    TEST_PATH = "data/evaluate/test_preguntas_146.txt"
-    DATA_JSON_PATH = "data/processed/enron_sample_1000+146+noise.json"
+    return db
+
+#---LOCAL TESTING---
+JSON_PATH = "data/processed/emails_processed.json"
+EMAILS_DB_PATH = "data/emails_vectordb"
+CONTACTS_DB_PATH = "data/emails_vectordb_contacts"
+
+# # #---ENRON---
+# JSON_PATH = "data/processed/enron_sample_10000+146+noise.json"
+# EMAILS_DB_PATH = "data/test_vectordb"
+# CONTACTS_DB_PATH = "data/test_vectordb_contacts"
+
+TEST_PATH = "data/evaluate/test_preguntas_146.txt"
+DATA_JSON_PATH = "data/processed/enron_sample_1000+146+noise.json"
     
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--run-tester", action="store_true")
-    parser.add_argument(
-        "--test-models",
-        action="store_true",
-        help="Probar múltiples modelos de embeddings",
-    )
-    parser.add_argument("--test-file", type=str, default="data/evaluate/test_preguntas_146.txt")
-    parser.add_argument("--json-path", type=str, default=JSON_PATH)
-    parser.add_argument("--topk", type=int, default=3)
-    parser.add_argument("--n-results", type=int, default=10)
-    parser.add_argument("--db-path", type=str, default=EMAILS_DB_PATH)
-    parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "cuda"])
-    parser.add_argument("--use-mrr", action="store_true", help="Usar MRR en vez de Precision@3")
-    args = parser.parse_args()
-
-    if args.test_models:
-        
+@click.command()
+@click.option("--json-path", default=JSON_PATH, help="Ruta al JSON de emails")
+@click.option("--emails-db-path", default=EMAILS_DB_PATH, help="Ruta a la DB de emails")
+@click.option("--contacts-db-path", default=CONTACTS_DB_PATH, help="Ruta a la DB de contactos")
+@click.option("--test-models", is_flag=True, help="Ejecutar comparativa de modelos")
+@click.option("--run-tester", is_flag=True, help="Ejecutar test de recuperación")
+@click.option("--db-path", default=EMAILS_DB_PATH, help="Ruta a la DB")
+@click.option("--test-file", default=TEST_PATH, help="Archivo de tests")
+@click.option("--topk", default=3, help="Número de resultados topK para evaluar")
+@click.option("--n-results", default=10, help="Número de resultados a recuperar por consulta")
+@click.option("--device", default="cpu", type=click.Choice(["cpu", "cuda"]), help="Dispositivo para el modelo de embeddings")
+def main_cli(json_path, emails_db_path, contacts_db_path, test_models, run_tester, db_path, test_file, topk, n_results, device):
+    if test_models:
         test_multiple_models(
             json_path=DATA_JSON_PATH,
             test_file=TEST_PATH,
-            topk=args.topk,
-            n_results=args.n_results,
-            device=args.device,
-            use_mrr=args.use_mrr,
+            topk=topk,
+            n_results=n_results,
+            device=device,
             output_file=DATA_JSON_PATH.replace("enron_sample", "data/evaluate/model_comparison"),
         )
-    elif args.run_tester:
-        db = EmailVectorDB(db_path="data/test_vectordb")
+        pass
+    elif run_tester:
+        db = EmailVectorDB(db_path=db_path)
         summary = run_retrieval_tester(
-            db, args.test_file, topk=args.topk, n_results=args.n_results, use_mrr=args.use_mrr
-        )
+            db, test_file, topk=topk, n_results=n_results)
 
         print("\n--- Tester summary ---")
         m = summary["metrics"]
         print(f"Queries: {m['n_queries']}")
         print(f"Missing expected IDs in DB: {m['n_missing_in_db']}")
         print(f"Precision@1: {m['precision_at_1']:.3f}")
-        if args.use_mrr:
-            print(f"MRR: {m['mrr']:.3f}")
-        else:
-            print(f"Precision@3: {m['precision_at_3']:.3f}")
+        print(f"Precision@3: {m['precision_at_3']:.3f}")
+        print(f"Precision@10: {m['precision_at_10']:.3f}")
+        pass
     else:
         test_embeddings_and_db(
-            json_path=JSON_PATH,
-            emails_db_path=EMAILS_DB_PATH,
-            contacts_db_path=CONTACTS_DB_PATH,
+            json_path=json_path,
+            emails_db_path=emails_db_path,
+            contacts_db_path=contacts_db_path,
         )
+        pass
+if __name__ == "__main__":
+    main_cli()

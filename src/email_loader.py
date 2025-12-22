@@ -6,6 +6,7 @@ from email.utils import parseaddr, getaddresses
 from pathlib import Path
 from typing import List, Dict, Optional
 import hashlib
+import click
 from tqdm import tqdm
 import json
 from dataclasses import dataclass, asdict
@@ -62,6 +63,53 @@ class EMLEmailLoader:
         self.emails_folder = Path(emails_folder)
         self.emails: List[Email] = []
         self.thread_map: Dict[str, List[str]] = {}
+        
+    def _load_eml_file_from_message(self, msg, source_filename: str):
+        message_id = msg.get("Message-ID", "")
+        if message_id:
+            message_id = message_id.strip("<>")
+
+        date_iso = self._process_date(msg.get("Date", ""))
+
+        from_addr = self._extract_from_address(msg)
+        to_addrs = self._extract_addresses(msg, "To")
+        cc_addrs = self._extract_addresses(msg, "Cc")
+        bcc_addrs = self._extract_addresses(msg, "Bcc")
+
+        subject = msg.get("Subject", "")
+
+        in_reply_to = msg.get("In-Reply-To", "")
+        if in_reply_to:
+            in_reply_to = in_reply_to.strip("<>")
+
+        references = msg.get("References", "")
+
+        thread_id = self._calculate_thread_id(
+            message_id, in_reply_to, references, subject
+        )
+
+        body = self._extract_body(msg)
+
+        import hashlib
+        email_id = hashlib.md5(
+            (message_id + from_addr + date_iso + source_filename).encode()
+        ).hexdigest()[:12]
+
+        return Email(
+            id=email_id,
+            message_id=message_id,
+            date=date_iso,
+            from_address=from_addr,
+            to_addresses=to_addrs,
+            cc_addresses=cc_addrs if cc_addrs else None,
+            bcc_addresses=bcc_addrs if bcc_addrs else None,
+            subject=subject,
+            body=body,
+            thread_id=thread_id,
+            in_reply_to=in_reply_to if in_reply_to else None,
+            references=references if references else None,
+            x_filename=source_filename,
+        )
 
     def load_emails(self) -> List[Email]:
 
@@ -334,7 +382,7 @@ def quick_test(emails_folder: str, output_json: str = None):
 
     if emails:
         print(f"\n=== ESTADÍSTICAS ===")
-        print(f"  - Total emails: {len(emails)}")
+        print(f"  - Total emails: {lenChecking(emails)}")
         print(f"  - Emails en threads: {sum(1 for e in emails if e.thread_id)}")
         print(f"  - Emails independientes: {sum(1 for e in emails if not e.thread_id)}")
         print(f"  - Emails con subject: {sum(1 for e in emails if e.subject)}")
@@ -350,15 +398,12 @@ def quick_test(emails_folder: str, output_json: str = None):
 
     return emails, loader
 
+@click.command()
+@click.option("--emails", required=True, help="Carpeta con archivos .eml")
+@click.option("--output", default="data/processed/emails_processed.json", help="Ruta de salida JSON")
+def main_cli(emails, output):
+    quick_test(emails, output)
 
 if __name__ == "__main__":
+    main_cli()
 
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--emails", type=str, default="data/emails")
-    parser.add_argument("--output", type=str, default="data/processed/emails_processed.json")
-    args = parser.parse_args()
-    
-    emails, loader = quick_test(
-        args.emails, args.output
-    )

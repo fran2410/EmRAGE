@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/python-3.13-blue)](https://www.python.org/) 
 
 # EmRAGE
-Development of an email search system based on LLMs.
+EmRAGE is a CLI tool designed to index your Thunderbird emails and interact with them using a RAG (Retrieval-Augmented Generation) engine.
 
 # Install from Github
 
@@ -37,22 +37,6 @@ Run the following command in the root of the repository to install dependencies:
 poetry install
 ```
 
-## 3. Models
-To install the models you can use the script `install.sh` or run the commands manually:
-```
-# --- 1. Ollama y llama3.2 ---
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull llama3.2:1b
-
-# --- 2. spaCy models ---
-poetry run python -m spacy download en_core_web_md
-poetry run python -m spacy download es_core_news_lg
-poetry run python -m spacy download fr_core_news_sm
-poetry run python -m spacy download de_core_news_sm
-poetry run python -m spacy download it_core_news_sm
-poetry run python -m spacy download pt_core_news_sm
-poetry run python -m spacy download xx_ent_wiki_sm
-```
 # Installing through Docker
 
 We provide a Docker image with the scripts already installed. To run through Docker, you may build the Dockerfile provided in the repository by running:
@@ -67,60 +51,35 @@ Then, to run your image just type:
 docker run -it emrage
 ```
 
-And you will be ready to use the scripts (see section below). If you want to have access to the results we recommend [mounting a volume](https://docs.docker.com/storage/volumes/). For example, the following command will mount the current directory as the `out` folder in the Docker image:
+And you will be ready to use the scripts (see section below). If you want to have access to the results we recommend [mounting a volume](https://docs.docker.com/storage/volumes/). We recommend the following command that will mount your email directory as the `out` folder in the Docker image:
 
 ```bash
-docker run -it --rm -v $PWD/out:/EmRAGE/out emrage 
+docker run -it -v {YOUR_THUNDERBIRD_EMAIL_DIRECTORY}:/EmRAGE/out emrage
 ```
-If you move any files produced by the scripts or set the output folder to `/out`, you will be able to see them in your current directory in the `/out` folder.
+To locate your Thunderbird email folder, navigate to: `Account Settings` → `Server Settings` → `Local Directory`.
 
 # Usage
 
-## 1. Email Processing
-Processes .eml files and converts them into structured format.
+## 1. Initial Configuration
+Before running the engine, you need to set up your local paths. The system will also automatically check for and install dependencies like Ollama and the necessary NLP models.
 
 ```bash
-python src/email_loader.py
+poetry run emrage config
 ```
-By default it reads from `data/emails` and writes to `data/processed/emails_processed.json`.
-#### Command Line Options
+- **Thunderbird Path:** Enter the path to your local mail folder.
 
-```
---emails                 # Emails folder
---output                 # Output JSON path
-```
+  - Tip: In Thunderbird, go to  `Account Settings` → `Server Settings` → `Local Directory` to find it.
 
-## 2. Semantic Indexing
-Once the emails are processed, they are indexed for quick searches.
+- **Database Path:** Choose where you want to store the generated vector databases (defaults to data/db).
+## 2. Run the Interactive Session
+Once configured and indexed, start the RAG engine to begin chatting with your email data:
 ```bash
-python src/embeddings_system.py
+poetry run emrage run
 ```
-By default it reads from `data/processed/enron_sample_10000+146+noise.json` and creates the database in `data/test_vectordb` and `data/test_vectordb_contacts`.
-    
-#### Command Line Options
-```
-# Model testing options
---test-models             # Test multiple embedding models
---test-file               # Path to test file (default: data/evaluate/test_preguntas_146.txt)
---topk                    # Top K results to consider (default: 3)
---n-results               # Number of results per query (default: 10)
---device                  # CPU or CUDA device (default: cpu)
-
-# Database paths
---db-path                 # Custom database path
---json-path               # Custom JSON data path
-```
-## 3. Search and Response System
-To use the interactive search system:
+## 3. Update Database
+If you have received new emails and want to re-index your local database, run:
 ```bash
-python src/rag_engine.py
-```
-By default uses `data/test_vectordb` and `data/test_vectordb_contacts` if they have been created previously with `src/embeddings_system.py`.
-#### Command Line Options
-```
-# Database paths
---db-path                 # Custom database path
---contact-db-path         # Custom contacts database path
+poetry run emrage update
 ```
 # Metadata
 

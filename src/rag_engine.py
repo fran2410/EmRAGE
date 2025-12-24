@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import click
 import requests
 from typing import List, Dict, Optional, Any, Tuple, Set
@@ -326,6 +327,7 @@ class OllamaHandler:
             "options": {
                 "temperature": self.temperature,
                 "num_predict": self.max_tokens,
+                "num_gpu": 0,
             },
         }
 
@@ -885,7 +887,19 @@ Por favor, evalúa la respuesta según los criterios mencionados.<|eot_id|><|sta
         print(f"[EVALUATOR]  Promedio: {result['average_score']}/10")
         
         return result
-
+def open_email(msg_id):
+    if os.path.exists('/.dockerenv'):
+        print(f" [INFO] Estás en Docker. Para ver el correo, busca el ID: {msg_id}")
+    else:
+        try:
+            subprocess.run(
+                ["xdg-open", f"mid:{msg_id}"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except FileNotFoundError:
+            print("xdg-open no está instalado.")
+            
 def start_interactive_session(db_path, contact_db_path):
     try:
 
@@ -975,11 +989,7 @@ def start_interactive_session(db_path, contact_db_path):
                                 
                                 if msg_id:
                                     print(f"Abriendo: {selected.get('subject')}...")
-                                    subprocess.run(
-                                        ["xdg-open", f"mid:{msg_id}"],
-                                        stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL
-                                    )
+                                    open_email(msg_id)
                                 else:
                                     print("No se pudo encontrar el ID del mensaje.")
                             else:

@@ -8,9 +8,7 @@ from embeddings_system import EmailVectorDB, ContactVectorDB, MultilingualEmbedd
 
 
 def load_test_data(questions_file: str, answers_file: str, num_questions: int) -> List[Tuple[str, str, str]]:
-    """Carga preguntas y respuestas esperadas"""
-    
-    # Cargar preguntas
+
     questions = {}
     with open(questions_file, "r", encoding="utf-8") as f:
         for raw in f:
@@ -22,7 +20,6 @@ def load_test_data(questions_file: str, answers_file: str, num_questions: int) -
                 email_id, question = line.split("\t", 1)
                 questions[email_id.strip()] = question.strip()
     
-    # Cargar respuestas
     answers = {}
     with open(answers_file, "r", encoding="utf-8") as f:
         for raw in f:
@@ -34,7 +31,6 @@ def load_test_data(questions_file: str, answers_file: str, num_questions: int) -
                 email_id, answer = line.split("\t", 1)
                 answers[email_id.strip()] = answer.strip()
     
-    # Combinar
     test_data = []
     for email_id, question in questions.items():
         expected_answer = answers.get(email_id, "")
@@ -103,7 +99,6 @@ FUENTES UTILIZADAS ({len(sources)}):
 
 
 class SimpleJudge:
-    """Evaluador simple que actúa como juez"""
     
     def __init__(self, judge_model: str = "llama3.2:3b"):
         self.ollama = OllamaHandler(model_name=judge_model)
@@ -156,7 +151,6 @@ RESPUESTA ESPERADA (GOLD STANDARD):
     
 
     def _parse_judge_response(self, raw_response: str) -> Tuple[str, str]:
-        """Extrae el veredicto y comentario de la respuesta del juez"""
         lines = raw_response.strip().split('\n')
         
         verdict = "INCORRECTO"
@@ -188,12 +182,9 @@ RESPUESTA ESPERADA (GOLD STANDARD):
         expected_email_id: str,
         sources: List[Dict],
         response_time: float = 0.0
-    ) -> Dict:
-        """Evalúa la respuesta"""
-        
+    ) -> Dict:        
         print(f"\n[JUEZ] Evaluando respuesta...")
         
-        # Obtener veredicto del juez
         prompt = self._create_judge_prompt(
             query,
             generated_response,
@@ -244,7 +235,6 @@ def run_evaluation(
     print(f"Modelo Juez: {judge_model}")
     print("="*100 + "\n")
     
-    # Cargar datos de prueba
     test_data = load_test_data(questions_file, answers_file, num_questions)
     
     if not test_data:
@@ -253,7 +243,6 @@ def run_evaluation(
     
     print(f"Cargados {len(test_data)} casos de prueba\n")
     
-    # Inicializar sistemas
     print("Inicializando sistemas...")
     try:
         embedder = MultilingualEmbedder()
@@ -279,10 +268,8 @@ def run_evaluation(
         traceback.print_exc()
         return
     
-    # Abrir archivo de salida
     with open(output_file, 'w', encoding='utf-8') as f:
         
-        # Escribir encabezado
         f.write("="*100 + "\n")
         f.write("REPORTE DE EVALUACIÓN CON JUEZ\n")
         f.write("="*100 + "\n")
@@ -292,16 +279,13 @@ def run_evaluation(
         f.write(f"Modelo Juez: {judge_model}\n")
         f.write("="*100 + "\n\n")
         
-        # Contadores
         total_correct = 0
         total_time = 0
         
-        # Procesar cada caso
         for idx, (email_id, query, expected_answer) in enumerate(test_data, 1):
             print(f"\n[{idx}/{len(test_data)}] Procesando: {query[:60]}...")
             
             try:
-                # Obtener respuesta del RAG
                 response_text = ""
                 metadata = None
                 start_time = datetime.now()
@@ -315,12 +299,11 @@ def run_evaluation(
                 response_time = (datetime.now() - start_time).total_seconds()
                 
                 if not metadata:
-                    print(f"⚠️  No se obtuvo metadata")
+                    print(f"No se obtuvo metadata")
                     continue
                 
                 sources = metadata.get("sources", [])
                 
-                # Evaluar con el juez
                 evaluation = judge.evaluate(
                     query=query,
                     generated_response=response_text,
@@ -330,12 +313,10 @@ def run_evaluation(
                     response_time=response_time
                 )
                 
-                # Actualizar contadores
                 if "CORRECTO" == evaluation["verdict"]:
                     total_correct += 1
                 total_time += response_time
                 
-                # Escribir reporte individual
                 report = format_evaluation_report(
                     query, email_id, response_text, expected_answer,
                     sources, evaluation, idx
@@ -352,7 +333,6 @@ def run_evaluation(
                 traceback.print_exc()
                 continue
         
-        # Escribir resumen final
         n = len(test_data)
         summary = f"""
 {'='*100}
@@ -380,7 +360,7 @@ TIEMPO:
 if __name__ == "__main__":
     QUESTIONS_FILE = "data/evaluate/test_preguntas_10.txt"
     ANSWERS_FILE = "data/evaluate/test_respuestas_10.txt"
-    OUTPUT_FILE = None  # Se generará automáticamente con timestamp
+    OUTPUT_FILE = None  
     
     DB_PATH = "data/test_vectordb"
     CONTACT_DB_PATH = "data/test_vectordb_contacts"

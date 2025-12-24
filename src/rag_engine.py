@@ -327,7 +327,6 @@ class OllamaHandler:
             "options": {
                 "temperature": self.temperature,
                 "num_predict": self.max_tokens,
-                "num_gpu": 0,
             },
         }
 

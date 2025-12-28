@@ -1,0 +1,77 @@
+{
+  "200": {
+    "metrics": {
+      "n_queries": 134,
+      "n_missing_in_db": 1,
+      "precision_at_1": 0.3582089552238806,
+      "precision_at_3": 0.4626865671641791,
+      "precision_at_10": 0.7761194029850746
+    },
+    "db_stats": {
+      "total_chunks": 19900,
+      "db_path": "data/test_vectordb_chunk_200",
+      "embedding_dim": 384
+    },
+    "elapsed_sec": 790.24
+  },
+  "300": {
+    "metrics": {
+      "n_queries": 134,
+      "n_missing_in_db": 1,
+      "precision_at_1": 0.3805970149253731,
+      "precision_at_3": 0.48507462686567165,
+      "precision_at_10": 0.7985074626865671
+    },
+    "db_stats": {
+      "total_chunks": 15230,
+      "db_path": "data/test_vectordb_chunk_300",
+      "embedding_dim": 384
+    },
+    "elapsed_sec": 569.31
+  },
+  "400": {
+    "metrics": {
+      "n_queries": 134,
+      "n_missing_in_db": 1,
+      "precision_at_1": 0.3656716417910448,
+      "precision_at_3": 0.4701492537313433,
+      "precision_at_10": 0.7686567164179104
+    },
+    "db_stats": {
+      "total_chunks": 13358,
+      "db_path": "data/test_vectordb_chunk_400",
+      "embedding_dim": 384
+    },
+    "elapsed_sec": 494.77
+  },
+  "500": {
+    "metrics": {
+      "n_queries": 134,
+      "n_missing_in_db": 1,
+      "precision_at_1": 0.3656716417910448,
+      "precision_at_3": 0.4701492537313433,
+      "precision_at_10": 0.7835820895522388
+    },
+    "db_stats": {
+      "total_chunks": 12435,
+      "db_path": "data/test_vectordb_chunk_500",
+      "embedding_dim": 384
+    },
+    "elapsed_sec": 454.21
+  },
+  "600": {
+    "metrics": {
+      "n_queries": 134,
+      "n_missing_in_db": 1,
+      "precision_at_1": 0.373134328358209,
+      "precision_at_3": 0.4925373134328358,
+      "precision_at_10": 0.835820895522388
+    },
+    "db_stats": {
+      "total_chunks": 11844,
+      "db_path": "data/test_vectordb_chunk_600",
+      "embedding_dim": 384
+    },
+    "elapsed_sec": 431.11
+  }
+}

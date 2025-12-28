@@ -1,5 +1,4 @@
 import time
-
 import click
 import chromadb
 from chromadb.config import Settings
@@ -16,6 +15,8 @@ import statistics
 import shutil
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import torch
+import gc
 
 class MultilingualEmbedder:
     def __init__(
@@ -265,11 +266,11 @@ class EmailVectorDB:
             print(f"Nueva colección '{collection_name}' creada")
 
         self.contact_db = contact_db
-        self.chunk_size = 300
+        self.chunk_size = 600
         self.chunk_overlap = 50
 
     def chunk_text(
-        self, text: str, chunk_size: int = 300, overlap: int = 50
+        self, text: str, chunk_size: int = 600, overlap: int = 50
     ) -> List[Tuple[str, int, int]]:
         if not text:
             return []
@@ -775,8 +776,7 @@ def test_multiple_models(
     n_results: int = 10,
     device: str = "cpu",    
 ):
-    import torch
-    import gc
+
 
     models_to_test = [
         "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
@@ -965,6 +965,89 @@ def test_embeddings_and_db(json_path: str, emails_db_path: str, contacts_db_path
     print(f"  - Contactos: {stats.get('contacts_count', 0)}")
 
     return db
+def test_chunk_sizes(
+    json_path: str,
+    test_file: str,
+    chunk_sizes: list = [50, 100, 200, 300, 400],
+    overlap_ratio: float = 0.2,
+    model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    device: str = "cpu",
+    batch_size: int = 32,
+    topk: int = 3,
+    n_results: int = 10,
+    output_file: Optional[str] = None,
+):
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        emails_data = json.load(f)
+    emails = [Email(**e) for e in emails_data]
+    total_emails = len(emails)
+
+    results = {}
+    for chunk_size in chunk_sizes:
+        start_time = time.perf_counter()
+        print(f"\n=== Probando chunk_size={chunk_size} ===\n")
+
+
+        safe_name = f"chunk_{chunk_size}"
+        db_path = f"data/test_vectordb_{safe_name}"
+        contacts_path = f"data/test_vectordb_contacts_{safe_name}"
+
+        embedder = None
+        db = None
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+
+            embedder = MultilingualEmbedder(model_name=model_name, device=device)
+            db = EmailVectorDB(db_path=db_path, embedder=embedder)
+
+            db.chunk_size = chunk_size
+            db.chunk_overlap = 50
+
+            print(f"Indexando {total_emails} emails con chunk_size={chunk_size}, overlap={50}")
+            db.index_emails(emails, batch_size=batch_size)
+
+            print("Ejecutando tester...")
+            summary = run_retrieval_tester(db, test_file, topk=topk, n_results=n_results)
+
+            stats = db.get_stats()
+            elapsed = time.perf_counter() - start_time
+
+            results[chunk_size] = {
+                "metrics": summary["metrics"],
+                "db_stats": stats,
+                "elapsed_sec": round(elapsed, 2),
+            }
+
+            print(f"Resultados chunk_size={chunk_size}: P@1={summary['metrics']['precision_at_1']:.3f}, "
+                  f"P@3={summary['metrics']['precision_at_3']:.3f}, P@10={summary['metrics']['precision_at_10']:.3f}")
+
+        except Exception as e:
+            elapsed = time.perf_counter() - start_time
+            results[chunk_size] = {"error": str(e), "elapsed_sec": round(elapsed, 2)}
+            print(f"Error probando chunk_size={chunk_size}: {e}")
+
+        finally:
+            try:
+                if db is not None:
+                    db.delete_db()
+            except Exception as e:
+                print(f"Error limpiando BD temporal: {e}")
+
+            del embedder
+            del db
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    print(f"Resultados guardados en {output_file}")
+
+    return results
+
 def make_embeddings_and_db_from_emails(
     emails: List[Email],
     emails_db_path: str = "data/vectordb",
@@ -1003,13 +1086,14 @@ DATA_JSON_PATH = "data/processed/enron_sample_1000+146+noise.json"
 @click.option("--emails-db-path", default=EMAILS_DB_PATH, help="Ruta a la DB de emails")
 @click.option("--contacts-db-path", default=CONTACTS_DB_PATH, help="Ruta a la DB de contactos")
 @click.option("--test-models", is_flag=True, help="Ejecutar comparativa de modelos")
+@click.option("--test-chunks", is_flag=True, help="Ejecutar comparativa de tamaños de chunks")
 @click.option("--run-tester", is_flag=True, help="Ejecutar test de recuperación")
 @click.option("--db-path", default=EMAILS_DB_PATH, help="Ruta a la DB")
 @click.option("--test-file", default=TEST_PATH, help="Archivo de tests")
 @click.option("--topk", default=3, help="Número de resultados topK para evaluar")
 @click.option("--n-results", default=10, help="Número de resultados a recuperar por consulta")
 @click.option("--device", default="cpu", type=click.Choice(["cpu", "cuda"]), help="Dispositivo para el modelo de embeddings")
-def main_cli(json_path, emails_db_path, contacts_db_path, test_models, run_tester, db_path, test_file, topk, n_results, device):
+def main_cli(json_path, emails_db_path, contacts_db_path, test_models, test_chunks, run_tester, db_path, test_file, topk, n_results, device):
     if test_models:
         test_multiple_models(
             json_path=DATA_JSON_PATH,
@@ -1033,6 +1117,19 @@ def main_cli(json_path, emails_db_path, contacts_db_path, test_models, run_teste
         print(f"Precision@3: {m['precision_at_3']:.3f}")
         print(f"Precision@10: {m['precision_at_10']:.3f}")
         pass
+    elif test_chunks:
+        test_chunk_sizes(
+        json_path="data/processed/enron_sample_1000+146+noise.json",
+        test_file="data/evaluate/test_preguntas_146.txt",
+        chunk_sizes=[200, 300, 400, 500, 600],
+        overlap_ratio=0.15,
+        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        device="cpu",
+        batch_size=32,
+        topk=3,
+        n_results=10,
+        output_file="data/evaluate/chunk_size_results.json",
+    )
     else:
         test_embeddings_and_db(
             json_path=json_path,
